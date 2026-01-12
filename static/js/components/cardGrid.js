@@ -1,0 +1,634 @@
+/**
+ * static/js/components/cardGrid.js
+ * 角色卡网格组件：核心列表视图
+ */
+
+import { 
+    listCards, 
+    deleteCards, 
+    findCardPage, 
+    moveCard, 
+    uploadCards 
+} from '../api/card.js';
+
+import { batchUpdateTags } from '../api/system.js';
+
+export default function cardGrid() {
+    return {
+        // === 本地状态 ===
+        cards: [],
+        currentPage: 1,
+        totalItems: 0,
+        totalPages: 1,
+        highlightId: null,
+        
+        // 批量标签输入的临时状态
+        batchTagInputAdd: "",
+        batchTagInputRemove: "",
+        
+        // 内部控制
+        _fetchCardsAbort: null,
+        _fetchCardsTimer: null,
+        _suppressAutoFetch: false, // 用于 locateCard 期间暂停自动刷新
+
+        dragOverMain: false,
+
+        get selectedIds() { return this.$store.global.viewState.selectedIds; },
+        set selectedIds(val) { this.$store.global.viewState.selectedIds = val; },
+        
+        get lastSelectedId() { return this.$store.global.viewState.lastSelectedId; },
+        set lastSelectedId(val) { this.$store.global.viewState.lastSelectedId = val; },
+
+        get draggedCards() { return this.$store.global.viewState.draggedCards; },
+        set draggedCards(val) { this.$store.global.viewState.draggedCards = val; },
+
+        // === 初始化 ===
+        init() {
+            // 1. 监听全局搜索/筛选变化 (Reactivity Fix)
+            // 使用 debounce 防止输入时频繁请求
+            this.$watch('$store.global.viewState.searchQuery', () => this.scheduleFetchCards('search'));
+            this.$watch('$store.global.viewState.searchType', () => { this.currentPage=1; this.scheduleFetchCards('type'); });
+            this.$watch('$store.global.viewState.filterCategory', () => { this.currentPage=1; this.fetchCards(); });
+            this.$watch('$store.global.viewState.filterTags', () => { this.currentPage=1; this.fetchCards(); });
+            this.$watch('$store.global.viewState.recursiveFilter', () => { this.fetchCards(); });
+            
+            // 监听排序设置变化
+            this.$watch('$store.global.settingsForm.default_sort', () => { this.currentPage=1; this.fetchCards(); });
+            this.$watch('$store.global.itemsPerPage', () => { this.currentPage=1; this.fetchCards(); });
+
+            // 2. 监听刷新事件 (来自 Header, Sidebar, Layout)
+            window.addEventListener('refresh-card-list', () => {
+                if (!this._suppressAutoFetch) this.fetchCards();
+            });
+
+            // 3. 监听重置滚动 (切换分类时)
+            window.addEventListener('reset-scroll', () => {
+                const el = document.getElementById('main-scroll');
+                if (el) el.scrollTop = 0;
+                this.currentPage = 1;
+            });
+
+            // 4. 监听搜索/高亮 (来自 Header)
+            window.addEventListener('highlight-card', (e) => {
+                this.highlightId = e.detail;
+                setTimeout(() => { this.highlightId = null; }, 2000);
+            });
+
+            // 5. 监听文件拖拽放下 (来自 Layout)
+            window.addEventListener('handle-files-drop', (e) => {
+                const { event, category } = e.detail;
+                this.handleFilesDrop(event, category);
+            });
+
+            // 6. 监听设置加载完成，初始加载数据
+            window.addEventListener('settings-loaded', () => {
+                this.fetchCards();
+            });
+            
+            // 7. 监听设置保存 (可能改变每页数量)
+            window.addEventListener('settings-saved', () => {
+                this.fetchCards();
+            });
+
+            // 8. 监听单卡更新事件
+            window.addEventListener('card-updated', (e) => {
+                const updatedCard = e.detail;
+                if (!updatedCard || !updatedCard.id) return;
+
+                // 1. 优先尝试用 ID 匹配
+                let idx = this.cards.findIndex(c => c.id === updatedCard.id);
+                
+                // 2. 如果没找到，且存在 old_id，尝试用 old_id 匹配
+                if (idx === -1 && updatedCard._old_id) {
+                    idx = this.cards.findIndex(c => c.id === updatedCard._old_id);
+                }
+
+                // 3. 如果是 Bundle 模式，还可以尝试通过 bundle_dir 匹配 (防止 ID 变化导致丢失)
+                if (idx === -1 && updatedCard.is_bundle && updatedCard.bundle_dir) {
+                    idx = this.cards.findIndex(c => c.is_bundle && c.bundle_dir === updatedCard.bundle_dir);
+                }
+
+                if (idx !== -1) {
+                    // 原地替换
+                    this.cards[idx] = updatedCard;
+                } else {
+                    // 如果完全没找到（可能是新增），插入开头
+                    this.cards.unshift(updatedCard);
+                }
+            });
+
+            window.addEventListener('locate-card', (e) => {
+                const card = e.detail; 
+                this._locateCardLogic(card);
+            });
+
+            // 监听标签模态框的批量删除请求
+            window.addEventListener('req-batch-remove-current-tags', (e) => {
+                const tagsToRemove = e.detail.tags;
+                this.handleBatchRemoveTagsFromView(tagsToRemove);
+            });
+        },
+
+        handleBatchRemoveTagsFromView(tags) {
+            // 获取当前视图所有卡片的 ID
+            const cardIds = this.cards.map(c => c.id);
+            
+            if (cardIds.length === 0) {
+                alert("当前视图中没有卡片");
+                return;
+            }
+
+            const confirmMsg = `确定要从当前视图的 ${cardIds.length} 张卡片中移除以下标签吗？\n\n${tags.join(', ')}\n\n此操作不可撤销！`;
+            if (!confirm(confirmMsg)) return;
+
+            batchUpdateTags({
+                card_ids: cardIds,
+                remove: tags
+            }).then(res => {
+                if (res.success) {
+                    alert(`成功更新 ${res.updated} 张卡片`);
+                    // 清空筛选状态
+                    this.$store.global.viewState.filterTags = [];
+                    // 刷新列表
+                    this.fetchCards();
+                    // 关闭模态框 (可选，通过事件或 store)
+                    this.$store.global.showTagFilterModal = false;
+                } else {
+                    alert("操作失败: " + res.msg);
+                }
+            });
+        },
+
+        openMarkdownView(content) {
+            if (!content) return;
+            // 派发事件，由 largeEditor 组件监听并显示
+            window.dispatchEvent(new CustomEvent('open-markdown-view', {
+                detail: content
+            }));
+        },
+
+        // === 核心数据加载 ===
+        fetchCards() {
+            const store = Alpine.store('global'); 
+            // 如果还在初始化，不请求
+            if (store.serverStatus.status !== 'ready') return;
+
+            // 取消上一次未完成请求
+            try { if (this._fetchCardsAbort) this._fetchCardsAbort.abort(); } catch(e) { console.error(e); }
+            this._fetchCardsAbort = new AbortController();
+
+            store.isLoading = true;
+            
+            const page = Math.max(1, Math.floor(this.currentPage));
+            const pageSize = Math.max(1, Math.floor(store.itemsPerPage));
+            
+            const vs = store.viewState;
+            
+            const params = {
+                page: page.toString(),
+                page_size: pageSize.toString(),
+                category: vs.filterCategory || '',
+                tags: (vs.filterTags || []).join('|||'),
+                search: vs.searchQuery || '',
+                search_type: vs.searchType || 'mix',
+                sort: store.settingsForm.default_sort || 'date_desc',
+                recursive: vs.recursiveFilter
+            };
+            
+            listCards(params) // 调用 API 模块
+                .then(data => {
+                    this.cards = data.cards || [];
+                    
+                    // === 更新全局 Store (供 Sidebar 使用) ===
+                    store.globalTagsPool = data.global_tags || [];
+                    store.sidebarTagsPool = data.sidebar_tags || [];
+                    store.allTagsPool = data.sidebar_tags || []; // 默认显示 sidebar tags
+                    store.categoryCounts = data.category_counts || {};
+                    store.libraryTotal = data.library_total || 0;
+                    
+                    // 更新文件夹列表 (用于 Sidebar 树生成)
+                    const paths = data.all_folders || [];
+                    store.allFoldersList = paths.map(p => ({
+                        path: p, 
+                        name: p.split('/').pop(), 
+                        level: p.split('/').length - 1
+                    }));
+
+                    // 更新分页
+                    this.totalItems = data.total_count || 0;
+                    this.totalPages = Math.ceil(this.totalItems / pageSize) || 1;
+                    
+                    store.isLoading = false;
+                })
+                .catch(err => {
+                    if (err && err.name !== 'AbortError') console.error(err);
+                    store.isLoading = false;
+                });
+        },
+
+        scheduleFetchCards(reason='') {
+            if (this._suppressAutoFetch) return;
+            clearTimeout(this._fetchCardsTimer);
+            this._fetchCardsTimer = setTimeout(() => {
+                this.fetchCards();
+            }, 250);
+        },
+
+        changePage(p) {
+            if (p >= 1 && p <= this.totalPages) {
+                this.currentPage = p;
+                const el = document.getElementById('main-scroll');
+                if (el) el.scrollTop = 0;
+                this.fetchCards();
+            }
+        },
+
+        // === 交互逻辑 ===
+
+        handleCardClick(e, card) {
+            // 处理 Ctrl/Meta (多选/反选)
+            if (e.ctrlKey || e.metaKey) {
+                this.toggleSelection(card);
+                return;
+            }
+            
+            // 处理 Shift (范围选择)
+            if (e.shiftKey && this.lastSelectedId) {
+                const allCards = this.cards; // 当前页所有卡片
+                const startIdx = allCards.findIndex(c => c.id === this.lastSelectedId);
+                const endIdx = allCards.findIndex(c => c.id === card.id);
+                
+                if (startIdx !== -1 && endIdx !== -1) {
+                    const min = Math.min(startIdx, endIdx);
+                    const max = Math.max(startIdx, endIdx);
+                    
+                    // 获取区间内的所有ID
+                    const rangeIds = allCards.slice(min, max + 1).map(c => c.id);
+                    
+                    // 合并到现有 selectedIds (去重)
+                    const currentSet = new Set(this.selectedIds);
+                    rangeIds.forEach(id => currentSet.add(id));
+                    
+                    this.selectedIds = Array.from(currentSet); // 写回 Store
+                }
+                return;
+            }
+
+            // 普通左键点击 -> 打开详情页
+            window.dispatchEvent(new CustomEvent('open-detail', { detail: card }));
+        },
+
+        toggleSelection(card) {
+            let ids = [...this.selectedIds];
+            if (ids.includes(card.id)) {
+                ids = ids.filter(id => id !== card.id);
+            } else {
+                ids.push(card.id);
+                this.lastSelectedId = card.id;
+            }
+            this.selectedIds = ids;
+        },
+
+        // === 批量标签操作 ===
+
+        batchAddTag(tag) {
+            const val = (tag || this.batchTagInputAdd || "").trim();
+            if (!val) return;
+            
+            // selectedIds 继承自 Layout
+            if (this.selectedIds.length === 0) {
+                alert("请先选择卡片");
+                return;
+            }
+
+            batchUpdateTags({
+                card_ids: this.selectedIds,
+                add: [val]
+            })
+            .then(res => {
+                if (res.success) {
+                    alert("成功更新 " + res.updated + " 张卡片");
+                    this.batchTagInputAdd = "";
+                    this.fetchCards();
+                } else {
+                    alert(res.msg);
+                }
+            });
+        },
+
+        batchRemoveTag(tag) {
+            const val = (tag || this.batchTagInputRemove || "").trim();
+            if (!val) return;
+
+            if (this.selectedIds.length === 0) {
+                alert("请先选择卡片");
+                return;
+            }
+
+            batchUpdateTags({
+                card_ids: this.selectedIds,
+                remove: [val]
+            })
+            .then(res => {
+                if (res.success) {
+                    alert("成功更新 " + res.updated + " 张卡片");
+                    this.batchTagInputRemove = "";
+                    this.fetchCards();
+                } else {
+                    alert(res.msg);
+                }
+            });
+        },
+
+        // === 拖拽逻辑 (Card Drag) ===
+
+        dragStart(e, card) {
+            let ids = [...this.selectedIds];
+            // 如果当前卡片没被选中，则选中它
+            if (!ids.includes(card.id)) {
+                ids = [card.id];
+                this.selectedIds = ids;
+            }
+            // 同步拖拽状态到 Store (用于 Layout 接收)
+            this.draggedCards = ids;
+            
+            e.dataTransfer.effectAllowed = 'move';
+            e.dataTransfer.setData('application/x-st-card', JSON.stringify(ids));
+            e.dataTransfer.setData('text/plain', card.id);
+            
+            // 视觉反馈
+            const cardElement = e.currentTarget.closest('.st-card');
+            if (cardElement) {
+                cardElement.classList.add('drag-source');
+                
+                // 自定义拖拽图片
+                if (e.dataTransfer.setDragImage) {
+                    const dragImg = document.createElement('img');
+                    window.dragImageElement = dragImg; 
+                    
+                    const displayCard = this.draggedCards.length > 1 ? 
+                        this.cards.find(c => c.id === this.draggedCards[0]) : card;
+                        
+                    if (displayCard && displayCard.image_url) {
+                        dragImg.src = displayCard.image_url;
+                        dragImg.style.width = '100px';
+                        dragImg.style.height = 'auto';
+                        dragImg.style.opacity = '0.7';
+                        dragImg.style.borderRadius = '8px';
+                        dragImg.style.boxShadow = '0 2px 8px rgba(0,0,0,0.3)';
+                        dragImg.style.position = 'absolute';
+                        dragImg.style.top = '-9999px';
+                        document.body.appendChild(dragImg);
+                        
+                        e.dataTransfer.setDragImage(dragImg, 50, 50);
+                    }
+                }
+            }
+        },
+
+        handleMainDragEnter(e) {
+            this.dragOverMain = true;
+        },
+        handleMainDragLeave(e) {
+            this.dragOverMain = false;
+        },
+
+        dropCards(targetCat) {
+            this.dragOverMain = false;
+            if (this.draggedCards.length === 0) return;
+            
+            const targetCatName = targetCat || '根目录';
+            if (!confirm(`移动 ${this.draggedCards.length} 张卡片到 "${targetCatName}"?`)) {
+                this.draggedCards = [];
+                return;
+            }
+            this.moveCardsToCategory(targetCat);
+        },
+
+        moveCardsToCategory(targetCategory) {
+            const movingIds = [...this.draggedCards];
+            document.body.style.cursor = 'wait';
+            
+            moveCard({
+                card_ids: movingIds,
+                target_category: targetCategory === '根目录' ? '' : targetCategory
+            })
+            .then(res => {
+                document.body.style.cursor = 'default';
+                if (res.success) {
+                    if (res.category_counts) this.$store.global.categoryCounts = res.category_counts;
+                    this.fetchCards();
+                    this.selectedIds = [];
+                    this.draggedCards = [];
+                } else {
+                    alert("移动失败: " + res.msg);
+                }
+            })
+            .catch(err => {
+                document.body.style.cursor = 'default';
+                alert("网络请求错误" + err);
+            });
+        },
+
+        // === 文件上传 (外部拖拽) ===
+        handleFilesDrop(e, targetCategory) {
+            if (e.dataTransfer.types.includes('application/x-st-card')) return;
+
+            const files = e.dataTransfer.files;
+            if (!files || files.length === 0) return;
+
+            const formData = new FormData();
+            let hasFiles = false;
+            for (let i = 0; i < files.length; i++) {
+                const name = files[i].name.toLowerCase();
+                if (files[i].type.startsWith('image/') || name.endsWith('.png') || name.endsWith('.json')) {
+                    formData.append('files', files[i]);
+                    hasFiles = true;
+                }
+            }
+
+            if (!hasFiles) return;
+
+            if (targetCategory === null || targetCategory === undefined) {
+                targetCategory = (this.filterCategory === '' || this.filterCategory === '根目录') ? '' : this.filterCategory;
+            }
+            if (targetCategory === '根目录') targetCategory = '';
+
+            formData.append('category', targetCategory);
+            this.$store.global.isLoading = true;
+
+            uploadCards(formData)
+                .then(res => {
+                    this.$store.global.isLoading = false;
+                    if (res.success) {
+                        if (res.category_counts) this.$store.global.categoryCounts = res.category_counts;
+
+                        if (res.new_cards && res.new_cards.length > 0) {
+                            res.new_cards.forEach(card => {
+                                let shouldShow = false;
+                                if (this.filterCategory === '') {
+                                    shouldShow = this.recursiveFilter || card.category === '';
+                                } else {
+                                    shouldShow = card.category === this.filterCategory || 
+                                        (this.recursiveFilter && card.category.startsWith(this.filterCategory + '/'));
+                                }
+
+                                if (shouldShow) {
+                                    this.insertCardSorted(card);
+                                    this.totalItems++;
+                                }
+                                
+                                if (card.tags) {
+                                    card.tags.forEach(t => {
+                                        if (!this.$store.global.allTagsPool.includes(t)) {
+                                            this.$store.global.allTagsPool.push(t);
+                                        }
+                                    });
+                                }
+                            });
+                        }
+
+                        let msg = "";
+                        if (res.new_cards && res.new_cards.length > 0) {
+                            msg += `成功导入 ${res.new_cards.length} 张卡片。\n`;
+                        }
+                        if (res.failed_files && res.failed_files.length > 0) {
+                            msg += `\n⚠️ 跳过 ${res.failed_files.length} 个无效文件:\n` + res.failed_files.join('\n');
+                        }
+                        if (msg) alert(msg);
+
+                    } else {
+                        alert("上传失败: " + res.msg);
+                    }
+                })
+                .catch(err => {
+                    this.$store.global.isLoading = false;
+                    alert("网络错误: " + err);
+                });
+        },
+
+        insertCardSorted(newCard) {
+            const sortMode = this.$store.global.settingsForm.default_sort || 'date_desc';
+            let index = -1;
+
+            if (sortMode === 'date_desc') {
+                index = this.cards.findIndex(c => c.last_modified < newCard.last_modified);
+            } else if (sortMode === 'date_asc') {
+                index = this.cards.findIndex(c => c.last_modified > newCard.last_modified);
+            } else if (sortMode === 'name_asc') {
+                index = this.cards.findIndex(c => String(c.char_name).localeCompare(String(newCard.char_name), 'zh-CN') > 0);
+            } else if (sortMode === 'name_desc') {
+                index = this.cards.findIndex(c => String(newCard.char_name).localeCompare(String(c.char_name), 'zh-CN') > 0);
+            }
+
+            if (index === -1) {
+                this.cards.push(newCard);
+            } else {
+                this.cards.splice(index, 0, newCard);
+            }
+        },
+
+        // === 删除卡片 ===
+        deleteCards(ids) {
+            if (!ids || ids.length === 0) return;
+            
+            let hasBundle = false;
+            let bundleNames = [];
+            this.cards.forEach(c => {
+                if (ids.includes(c.id) && c.is_bundle) {
+                    hasBundle = true;
+                    bundleNames.push(c.char_name);
+                }
+            });
+
+            let confirmMsg = "";
+            if (hasBundle) {
+                confirmMsg = `⚠️【操作确认】⚠️\n\n你选中了聚合角色包：\n${bundleNames.join(', ')}\n\n确认将其移至回收站吗？`;
+            } else {
+                confirmMsg = `🗑️ 确定将选中的 ${ids.length} 张卡片移至回收站吗？`;
+            }
+            if (!confirm(confirmMsg)) return;
+
+            deleteCards(ids).then(res => {
+                if (res.success) {
+                    if (res.category_counts) this.$store.global.categoryCounts = res.category_counts;
+
+                    const deletedSet = new Set(ids);
+                    const oldLength = this.cards.length;
+                    this.cards = this.cards.filter(c => !deletedSet.has(c.id));
+                    
+                    const deletedCount = oldLength - this.cards.length;
+                    this.totalItems -= deletedCount;
+                    if (this.filterCategory === '' && !this.searchQuery) {
+                        this.$store.global.libraryTotal -= deletedCount;
+                    }
+
+                    this.selectedIds = [];
+                    
+                    if (this.cards.length === 0 && this.currentPage > 1) {
+                        this.changePage(this.currentPage - 1);
+                    } else if (this.cards.length === 0 && this.totalItems > 0) {
+                        this.fetchCards();
+                    }
+
+                    if(hasBundle) alert("已将聚合文件夹移至回收站。");
+                } else {
+                    alert("删除失败: " + res.msg);
+                }
+            });
+        },
+
+        _locateCardLogic(card) {
+            if (!card) return;
+            
+            let targetCategory = card.category;
+            if (card.is_bundle || (card.id.split('/').length > 1 && !targetCategory)) {   
+                // 如果 targetCategory 等于 activeCard.bundle_dir，则向上取一级
+                if (card.bundle_dir && targetCategory === card.bundle_dir) {
+                    const parentParts = targetCategory.split('/');
+                    parentParts.pop(); // 移除 Bundle 名
+                    targetCategory = parentParts.join('/');
+                }
+            }
+            if (targetCategory === undefined || targetCategory === null) {
+                targetCategory = card.id.includes('/') ? card.id.split('/').slice(0, -1).join('/') : '';
+            }
+
+            const store = Alpine.store('global');
+
+            this._suppressAutoFetch = true;
+            store.viewState.filterCategory = targetCategory;
+            store.isLoading = true;
+
+            findCardPage({
+                card_id: card.id,
+                category: targetCategory,
+                sort: store.settingsForm.default_sort,
+                page_size: store.itemsPerPage
+            })
+            .then(res => {
+                if (res.success) {
+                    this.currentPage = res.page;
+                    this.highlightId = card.id;
+                    
+                    this._suppressAutoFetch = false;
+                    this.fetchCards();
+                    
+                    setTimeout(() => { this.highlightId = null; }, 3000);
+                } else {
+                    alert(res.msg || "定位失败");
+                    this.$store.global.isLoading = false;
+                    this._suppressAutoFetch = false;
+                }
+            })
+            .catch(e => {
+                console.error(e);
+                this.$store.global.isLoading = false;
+                this._suppressAutoFetch = false;
+            });
+        },
+        
+        get filteredCards() { return this.cards; },
+        get paginatedCards() { return this.cards; }
+    }
+}

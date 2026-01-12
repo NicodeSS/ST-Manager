@@ -1,0 +1,403 @@
+<!-- 高级功能编辑器 (Regex & Scripts) -->
+<div x-show="showAdvancedModal" x-data="advancedEditor" x-cloak class="modal-overlay z-max-modal" @click.self="showAdvancedModal=false">
+    <div class="modal-container" x-data="{ activeTab: 'regex' }"
+        style="width: 1200px; height: 90vh; flex-direction: column; background: var(--bg-panel); border: 1px solid var(--border-light);">
+
+        <!-- 1. 顶部 Header -->
+        <div class="p-4 border-b flex justify-between items-center"
+            style="background: var(--bg-sub); border-color: var(--border-light);">
+            <div class="flex items-center gap-3">
+                <h3 class="font-bold text-lg" style="color: var(--text-main);">🛠️ 高级扩展</h3>
+                <span class="text-xs px-2 py-0.5 rounded border border-gray-600 text-gray-400">Regex &
+                    Scripts</span>
+            </div>
+            <button @click="showAdvancedModal=false"
+                class="text-gray-400 hover:text-red-500 transition text-xl">✕</button>
+        </div>
+
+        <!-- 2. 顶部 Tabs (已移除 x-data，使用父级状态) -->
+        <div class="adv-tab-bar">
+            <div @click="activeTab='regex'" class="adv-tab" :class="activeTab==='regex'?'active':''">
+                <span>🧩</span> 正则脚本 (Regex)
+            </div>
+            <div @click="activeTab='scripts'" class="adv-tab" :class="activeTab==='scripts'?'active':''">
+                <span>📜</span> ST 脚本 (Helper)
+            </div>
+        </div>
+
+        <!-- 3. 主体内容区 (已移除 x-data，使用父级状态) -->
+        <div class="flex-1 overflow-hidden relative">
+
+            <!-- === Tab 1: Regex (Split View) === -->
+            <div x-show="activeTab==='regex'" class="adv-split-view">
+
+                <!-- 左侧：正则列表 -->
+                <div class="adv-list-pane custom-scrollbar overflow-y-auto">
+                    <div
+                        class="p-3 border-b border-[var(--border-light)] flex justify-between items-center bg-[var(--bg-sub)] sticky top-0 z-10">
+                        <span class="text-xs font-bold text-[var(--text-sub)] uppercase">Script List</span>
+                        <button @click="addRegexScript()"
+                            class="text-xs bg-green-600 hover:bg-green-500 text-white px-2 py-1 rounded transition">
+                            + 新建
+                        </button>
+                    </div>
+
+                    <div class="flex flex-col">
+                        <template x-for="(script, idx) in editingData.extensions.regex_scripts" :key="script.id || idx">
+                            <!-- 使用 flex 布局，移除 pr-8 和 relative，改为 items-center -->
+                            <div class="adv-list-item group flex items-center justify-between gap-2"
+                                :class="activeRegexIndex === idx ? 'active' : ''" @click="activeRegexIndex = idx">
+
+                                <!-- 左侧：文本信息 (占据剩余空间) -->
+                                <div class="flex-1 min-w-0 overflow-hidden">
+                                    <div class="flex justify-between items-center mb-1">
+                                        <span class="font-bold text-sm truncate"
+                                            :class="script.disabled ? 'text-gray-500 line-through' : 'text-[var(--text-main)]'"
+                                            x-text="script.scriptName || '未命名脚本'"></span>
+                                    </div>
+                                    <div class="text-[10px] font-mono text-[var(--text-dim)] truncate"
+                                        x-text="script.findRegex || 'Empty Regex'"></div>
+
+                                    <!-- 状态小标 -->
+                                    <div class="flex gap-1 mt-1">
+                                        <span x-show="script.runOnEdit" class="w-2 h-2 rounded-full bg-blue-500"
+                                            title="Run On Edit"></span>
+                                        <span x-show="script.placement && script.placement.length > 0"
+                                            class="w-2 h-2 rounded-full bg-purple-500" title="Has Placement"></span>
+                                    </div>
+                                </div>
+
+                                <!-- 右侧：操作按钮组 (悬停显示，Flex布局防止错位) -->
+                                <div
+                                    class="flex flex-col gap-1 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
+                                    <!-- 排序按钮 -->
+                                    <div class="flex flex-col">
+                                        <button @click.stop="moveRegex(idx, -1)"
+                                            class="sort-btn-xs rounded-t border-b-0" title="上移">▲</button>
+                                        <button @click.stop="moveRegex(idx, 1)" class="sort-btn-xs rounded-b"
+                                            title="下移">▼</button>
+                                    </div>
+                                </div>
+
+                                <!-- 删除按钮 (单独一列) -->
+                                <button @click.stop="removeRegexScript(idx)"
+                                    class="opacity-0 group-hover:opacity-100 text-gray-500 hover:text-red-400 p-1 flex-shrink-0 transition">
+                                    ✕
+                                </button>
+                            </div>
+                        </template>
+
+                        <div x-show="editingData.extensions.regex_scripts.length === 0"
+                            class="p-8 text-center text-[var(--text-dim)] text-xs">
+                            暂无正则脚本<br>点击上方按钮添加
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 右侧：编辑器 -->
+                <template
+                    x-if="activeRegexIndex !== -1 && editingData.extensions.regex_scripts && editingData.extensions.regex_scripts[activeRegexIndex]">
+                    <div class="adv-editor-pane custom-scrollbar">
+                        <!-- 移除 x-data="{ script: ... }"，改为直接绑定路径，确保切换索引时数据实时刷新 -->
+                        <div class="flex flex-col gap-4">
+
+                            <!-- A. 基础信息栏 -->
+                            <div class="flex gap-4 items-end border-b border-[var(--border-light)] pb-4">
+                                <div class="flex-1">
+                                    <label class="form-label">脚本名称 (Script Name)</label>
+                                    <input type="text"
+                                        x-model="editingData.extensions.regex_scripts[activeRegexIndex].scriptName"
+                                        class="form-input font-bold text-lg">
+                                </div>
+                                <div class="flex gap-4 pb-2">
+                                    <label class="flex items-center gap-2 cursor-pointer select-none"
+                                        title="6. 在编辑时运行，当指定角色的消息被编辑时运行正则脚本。">
+                                        <input type="checkbox"
+                                            x-model="editingData.extensions.regex_scripts[activeRegexIndex].runOnEdit"
+                                            class="w-4 h-4 rounded accent-blue-500">
+                                        <span class="text-sm text-[var(--text-main)]">编辑时运行</span>
+                                    </label>
+                                    <label class="flex items-center gap-2 cursor-pointer select-none" title="禁用此脚本">
+                                        <input type="checkbox"
+                                            x-model="editingData.extensions.regex_scripts[activeRegexIndex].disabled"
+                                            class="w-4 h-4 rounded accent-red-500">
+                                        <span class="text-sm font-bold text-red-400">禁用</span>
+                                    </label>
+                                </div>
+                            </div>
+
+                            <!-- B. 正则核心 (Find) -->
+                            <div class="adv-section">
+                                <div class="adv-section-title">
+                                    <span>🔍 查找 (Match)</span>
+                                    <div class="flex items-center gap-2">
+                                        <span class="text-[10px] text-[var(--text-dim)]"
+                                            title="8. 宏替换：在运行正则表达式之前，替换{{macros}}">宏替换:</span>
+                                        <select
+                                            x-model.number="editingData.extensions.regex_scripts[activeRegexIndex].substituteRegex"
+                                            class="bg-[var(--bg-sub)] border border-[var(--border-light)] text-[10px] rounded px-2 py-1 outline-none text-[var(--text-main)]">
+                                            <option value="0">None (不替换)</option>
+                                            <option value="1">Raw (原始)</option>
+                                            <option value="2">Escaped (转义)</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <div class="relative">
+                                    <span class="absolute left-3 top-2.5 text-yellow-500 font-mono text-sm">/</span>
+                                    <input type="text"
+                                        x-model="editingData.extensions.regex_scripts[activeRegexIndex].findRegex"
+                                        class="form-input font-mono text-sm pl-6 pr-12"
+                                        style="color: #eab308; background: var(--bg-code);" placeholder="regex pattern">
+                                    <span class="absolute right-3 top-2.5 text-yellow-500 font-mono text-sm">/gm</span>
+                                </div>
+                                <div class="flex gap-4 mt-2">
+                                    <label class="flex items-center gap-2 cursor-pointer">
+                                        <input type="checkbox"
+                                            x-model="editingData.extensions.regex_scripts[activeRegexIndex].caseSensitive"
+                                            class="rounded bg-gray-700">
+                                        <span class="text-xs text-[var(--text-sub)]">区分大小写 (Case Sensitive)</span>
+                                    </label>
+                                </div>
+                            </div>
+
+                            <!-- C. 替换与剔除 (Replace & Trim) -->
+                            <div class="grid grid-cols-2 gap-4">
+                                <!-- 替换 -->
+                                <div class="adv-section flex flex-col h-48">
+                                    <div class="adv-section-title text-green-500">✨ 替换内容 (Replace With)</div>
+                                    <textarea
+                                        x-model="editingData.extensions.regex_scripts[activeRegexIndex].replaceString"
+                                        class="form-textarea font-mono text-xs flex-1 resize-none custom-scrollbar"
+                                        style="color: #22c55e; background: var(--bg-code);"
+                                        placeholder="Replacement string (supports $1, $2...)"></textarea>
+                                </div>
+                                <!-- 剔除 -->
+                                <div class="adv-section flex flex-col h-48">
+                                    <div class="adv-section-title text-blue-400">✂️ 剔除字符串 (Trim Out)</div>
+                                    <textarea
+                                        :value="getTrimStringsText(editingData.extensions.regex_scripts[activeRegexIndex])"
+                                        @input="updateTrimStrings(editingData.extensions.regex_scripts[activeRegexIndex], $event.target.value)"
+                                        class="form-textarea font-mono text-xs flex-1 resize-none custom-scrollbar"
+                                        style="background: var(--bg-code);"
+                                        placeholder="One string per line to remove before regex runs"></textarea>
+                                </div>
+                            </div>
+
+                            <!-- D. 高级设置 (Placement & Depth) -->
+                            <div class="adv-section">
+                                <div class="adv-section-title">⚙️ 作用范围与限制 (Settings)</div>
+                                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+
+                                    <!-- 作用范围 Placement -->
+                                    <div>
+                                        <label class="form-label mb-2">生效位置 (Placement)</label>
+                                        <div class="grid grid-cols-2 gap-y-2 gap-x-4">
+                                            <label class="flex items-center gap-2 cursor-pointer select-none"
+                                                title="1. 用户输入：用户发送的信息">
+                                                <input type="checkbox"
+                                                    :checked="editingData.extensions.regex_scripts[activeRegexIndex].placement?.includes(1)"
+                                                    @change="toggleRegexPlacement(editingData.extensions.regex_scripts[activeRegexIndex], 1)"
+                                                    class="w-3.5 h-3.5 rounded">
+                                                <span class="text-xs">用户输入 (User)</span>
+                                            </label>
+                                            <label class="flex items-center gap-2 cursor-pointer select-none"
+                                                title="2. AI输出从生成式AI中获取的信息">
+                                                <input type="checkbox"
+                                                    :checked="editingData.extensions.regex_scripts[activeRegexIndex].placement?.includes(2)"
+                                                    @change="toggleRegexPlacement(editingData.extensions.regex_scripts[activeRegexIndex], 2)"
+                                                    class="w-3.5 h-3.5 rounded">
+                                                <span class="text-xs">AI 输出 (AI)</span>
+                                            </label>
+                                            <label class="flex items-center gap-2 cursor-pointer select-none"
+                                                title="3. 快捷命令：通过 STscript 命令发送的消息">
+                                                <input type="checkbox"
+                                                    :checked="editingData.extensions.regex_scripts[activeRegexIndex].placement?.includes(3)"
+                                                    @change="toggleRegexPlacement(editingData.extensions.regex_scripts[activeRegexIndex], 3)"
+                                                    class="w-3.5 h-3.5 rounded">
+                                                <span class="text-xs">快捷命令 (Slash)</span>
+                                            </label>
+                                            <label class="flex items-center gap-2 cursor-pointer select-none"
+                                                title="4. 世界信息：知识书/世界书 条目的内容。需要勾选'仅格式提示词'！">
+                                                <input type="checkbox"
+                                                    :checked="editingData.extensions.regex_scripts[activeRegexIndex].placement?.includes(5)"
+                                                    @change="toggleRegexPlacement(editingData.extensions.regex_scripts[activeRegexIndex], 5)"
+                                                    class="w-3.5 h-3.5 rounded">
+                                                <span class="text-xs">世界信息 (WI)</span>
+                                            </label>
+                                            <label class="flex items-center gap-2 cursor-pointer select-none"
+                                                title="5. 推理：推理块内容。当'仅格式提示词'被选中时，它会影响提示词里的推理内容。">
+                                                <input type="checkbox"
+                                                    :checked="editingData.extensions.regex_scripts[activeRegexIndex].placement?.includes(6)"
+                                                    @change="toggleRegexPlacement(editingData.extensions.regex_scripts[activeRegexIndex], 6)"
+                                                    class="w-3.5 h-3.5 rounded">
+                                                <span class="text-xs">推理 (Reasoning)</span>
+                                            </label>
+                                        </div>
+                                    </div>
+
+                                    <!-- 限制与模式 -->
+                                    <div class="flex flex-col gap-3">
+                                        <div class="flex gap-4">
+                                            <div class="flex-1">
+                                                <label class="text-[10px] text-[var(--text-dim)] uppercase block mb-1"
+                                                    title="7. 最小深度... '0'为最后一条消息">最小深度 (Min Depth)</label>
+                                                <input type="number"
+                                                    x-model.number="editingData.extensions.regex_scripts[activeRegexIndex].minDepth"
+                                                    class="form-input text-xs py-1" placeholder="Unlimited">
+                                            </div>
+                                            <div class="flex-1">
+                                                <label class="text-[10px] text-[var(--text-dim)] uppercase block mb-1"
+                                                    title="7. 最大深度...">最大深度 (Max Depth)</label>
+                                                <input type="number"
+                                                    x-model.number="editingData.extensions.regex_scripts[activeRegexIndex].maxDepth"
+                                                    class="form-input text-xs py-1" placeholder="Unlimited">
+                                            </div>
+                                        </div>
+                                        <div class="flex gap-4 pt-1 border-t border-[var(--border-light)] mt-1">
+                                            <label class="flex items-center gap-2 cursor-pointer select-none"
+                                                title="9. 仅格式显示：正则仅对聊天页面生效，聊天文件内的内容不会被改变。">
+                                                <input type="checkbox"
+                                                    x-model="editingData.extensions.regex_scripts[activeRegexIndex].markdownOnly"
+                                                    class="w-3.5 h-3.5 rounded">
+                                                <span class="text-xs text-[var(--text-sub)]">仅格式显示</span>
+                                            </label>
+                                            <label class="flex items-center gap-2 cursor-pointer select-none"
+                                                title="10. 仅格式提示词：聊天记录不会改变，只有在请求发送时（生成时）才会出现提示词。">
+                                                <input type="checkbox"
+                                                    x-model="editingData.extensions.regex_scripts[activeRegexIndex].promptOnly"
+                                                    class="w-3.5 h-3.5 rounded">
+                                                <span class="text-xs text-[var(--text-sub)]">仅格式提示词</span>
+                                            </label>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- E. 实时测试台 (Test Bench) -->
+                            <div class="adv-section bg-[var(--bg-sub)]">
+                                <div class="adv-section-title text-purple-400">
+                                    <span>🧪 实时测试台 (JS Regex Playground)</span>
+                                    <button @click="runRegexTest()"
+                                        class="text-xs bg-purple-600 hover:bg-purple-500 text-white px-3 py-1 rounded shadow-md transition">
+                                        ▶ 运行测试
+                                    </button>
+                                </div>
+                                <div class="test-bench-grid">
+                                    <!-- 输入 -->
+                                    <div class="test-io-box">
+                                        <div class="test-io-header">输入文本 (Input)</div>
+                                        <textarea x-model="regexTestInput" @input.debounce.300ms="runRegexTest()"
+                                            class="test-io-content custom-scrollbar"
+                                            placeholder="Paste test text here..."></textarea>
+                                    </div>
+                                    <!-- 输出 -->
+                                    <div class="test-io-box">
+                                        <div class="test-io-header">
+                                            <span>输出结果 (Result)</span>
+                                            <div class="flex items-center gap-2">
+                                                <!-- 放大按钮 -->
+                                                <button x-show="regexPreviewMode==='html'"
+                                                    @click="$dispatch('open-html-preview', regexTestResult)" title="全屏预览"
+                                                    class="text-[10px] bg-[var(--bg-panel)] border border-[var(--border-light)] rounded px-2 py-[2px] hover:text-[var(--accent-light)] transition">
+                                                    ⤢ 放大
+                                                </button>
+
+                                                <!-- 切换按钮 -->
+                                                <div class="toggle-pill">
+                                                    <div @click="regexPreviewMode='text'" class="toggle-pill-btn"
+                                                        :class="regexPreviewMode==='text'?'active':''">Text</div>
+                                                    <div @click="regexPreviewMode='html'" class="toggle-pill-btn"
+                                                        :class="regexPreviewMode==='html'?'active':''">HTML</div>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <!-- 纯文本显示 -->
+                                        <textarea x-show="regexPreviewMode==='text'" readonly
+                                            class="test-io-content custom-scrollbar" x-text="regexTestResult"
+                                            placeholder="Result will appear here..."></textarea>
+
+                                        <!-- HTML 渲染显示 (Shadow DOM) -->
+                                        <div x-show="regexPreviewMode==='html'" class="test-io-content"
+                                            style="padding: 0; min-height: 0; background: var(--bg-sub);"
+                                            x-effect="updateShadowContent($el, regexPreviewMode==='html' ? regexTestResult : null)">
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                        </div>
+                    </div>
+                </template>
+
+
+                <!-- 未选中脚本时的占位 -->
+                <div class="adv-editor-pane flex items-center justify-center text-[var(--text-dim)]"
+                    x-show="activeRegexIndex === -1 || !editingData.extensions.regex_scripts[activeRegexIndex]">
+                    <div class="text-center">
+                        <div class="text-4xl mb-2 opacity-30">🧩</div>
+                        <p>请在左侧选择或新建一个正则脚本</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- === Tab 2: Scripts (Placeholder / Simple List) === -->
+            <div x-show="activeTab==='scripts'" class="p-6 h-full overflow-y-auto custom-scrollbar">
+                <div class="flex justify-between items-center mb-4">
+                    <div>
+                        <h4 class="text-lg font-bold text-green-500">ST 脚本 (Tavern Script)</h4>
+                        <p class="text-xs text-[var(--text-dim)]">用于 酒馆助手插件 加载的 JS 脚本片段</p>
+                    </div>
+                    <button @click="addTavernScript()" class="btn-secondary text-xs px-3 py-1.5">+ 新增脚本</button>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <template x-for="script in getTavernScripts()" :key="script.id">
+                        <div
+                            class="border rounded p-3 bg-[var(--bg-sub)] border-[var(--border-light)] flex flex-col gap-2">
+                            <div class="flex justify-between items-center">
+                                <div class="flex items-center gap-2 flex-1">
+                                    <input type="checkbox" x-model="script.enabled"
+                                        class="cursor-pointer w-4 h-4 rounded" title="启用/禁用脚本">
+                                    <input type="text" x-model="script.name"
+                                        class="bg-transparent border-b text-sm font-bold w-full outline-none transition-colors focus:border-accent-main"
+                                        :class="script.enabled ? 'text-[var(--text-main)]' : 'text-[var(--text-dim)]'"
+                                        style="border-color: var(--border-light);">
+                                </div>
+                                <!-- 排序 -->
+                                <div class="flex flex-col mr-2">
+                                    <button @click="moveTavernScript(script.id, -1)"
+                                        class="text-[10px] text-gray-500 hover:text-white">▲</button>
+                                    <button @click="moveTavernScript(script.id, 1)"
+                                        class="text-[10px] text-gray-500 hover:text-white">▼</button>
+                                </div>
+                                <button @click="removeTavernScript(script.id)"
+                                    class="text-red-400 text-xs hover:underline ml-2">🗑️</button>
+                            </div>
+                            <textarea x-model="script.content"
+                                class="form-textarea font-mono text-xs h-32 custom-scrollbar"
+                                style="background: var(--bg-code); color: var(--text-code); resize: none;"
+                                placeholder="console.log('Script content...');"></textarea>
+                        </div>
+                    </template>
+                </div>
+
+                <div x-show="getTavernScripts().length === 0"
+                    class="text-center py-10 border border-dashed border-[var(--border-light)] rounded mt-4">
+                    <p class="text-[var(--text-dim)]">暂无脚本</p>
+                </div>
+            </div>
+
+        </div>
+
+        <!-- 4. 底部 Action Bar -->
+        <div class="p-4 border-t flex justify-between items-center bg-[var(--bg-sub)] border-[var(--border-light)]">
+            <div class="text-xs text-[var(--text-dim)]">
+                提示: 修改会自动暂存，需点击主界面的 <span class="font-bold text-accent-main">保存</span> 按钮才会写入文件。
+            </div>
+            <button @click="showAdvancedModal=false" class="btn-primary px-6 py-2 rounded shadow-lg font-bold">
+                完成 (Done)
+            </button>
+        </div>
+    </div>
+</div>

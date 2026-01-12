@@ -1,0 +1,24 @@
+<!-- 右键菜单 -->
+
+<div x-data="contextMenu" x-show="visible" @click.away="hideContextMenu"
+    :style="{ top: y + 'px', left: x + 'px' }"
+    class="fixed z-50 shadow-xl rounded-lg py-1 w-56 overflow-hidden"
+    style="background: var(--bg-panel); border: 1px solid var(--border-light); display:none;">
+    <template x-if="type === 'folder'">
+        <div>
+            <button x-show="target !== ''" @click="showRenameFolderModal(target)"
+                class="w-full text-left px-4 py-2 text-sm hover:bg-gray-700 transition-colors flex items-center gap-2"
+                style="color: var(--text-main);"><span>✏️</span> 重命名</button>
+            <button @click="showCreateSubFolderModal(target)"
+                class="w-full text-left px-4 py-2 text-sm hover:bg-gray-700 transition-colors flex items-center gap-2"
+                style="color: var(--text-main);"><span>➕</span> 创建子分类</button>
+            <hr x-show="target !== ''" class="border-gray-700 my-1">
+            <button x-show="target !== ''" @click="toggleBundleMode(targetFolder)"
+                class="w-full text-left px-4 py-2 text-sm text-yellow-400 hover:bg-gray-700 transition-colors flex items-center gap-2"><span>📦</span>
+                切换"角色包"</button>
+            <button x-show="target !== ''" @click="deleteFolder(target)"
+                class="w-full text-left px-4 py-2 text-sm text-red-400 hover:bg-gray-700 transition-colors flex items-center gap-2"><span>🗑️</span>
+                删除分类</button>
+        </div>
+    </template>
+</div>

@@ -1,0 +1,101 @@
+<!-- 顶部导航栏 -->
+<div class="header-bar" x-data="header">
+    <div style="display: flex; align-items: center; gap: 1rem; flex: 1;">
+        <div style="display: flex; align-items: center; gap: 0.5rem;">
+            <span style="font-size: 1.5rem;">🎴</span>
+            <span style="font-weight: bold; font-size: 1.125rem; white-space: nowrap;">ST Manager <span
+                    style="font-size: 0.75rem; background: var(--accent-main); color: white; padding:2px 6px; border-radius:4px;">v66</span></span>
+        </div>
+        <!-- === 递归过滤开关 === -->
+        <div x-show="currentMode === 'cards'"
+            class="flex items-center gap-2 ml-4 px-3 py-1.5 rounded-full border shadow-sm transition-colors"
+            style="background-color: var(--bg-sub); border-color: var(--border-light);">
+            <span class="text-xs cursor-pointer select-none font-medium" style="color: var(--text-sub);"
+                @click="recursiveFilter = !recursiveFilter; fetchCards()">
+                包含子目录
+            </span>
+            <!-- 开关轨道 -->
+            <button type="button"
+                class="relative inline-flex h-5 w-9 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none"
+                :style="{ backgroundColor: recursiveFilter ? 'var(--accent-main)' : 'var(--bg-hover)' }"
+                @click="recursiveFilter = !recursiveFilter; fetchCards()" role="switch"
+                :aria-checked="recursiveFilter">
+                <span aria-hidden="true"
+                    class="pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out"
+                    :class="recursiveFilter ? 'translate-x-4' : 'translate-x-0'">
+                </span>
+            </button>
+        </div>
+        <div style="display: flex; gap: 0.5rem; overflow-x: auto; margin-left: 1rem; flex: 1;"
+            class="custom-scrollbar">
+            <template x-for="tag in filterTags" :key="tag">
+                <div class="filter-chip" @click="toggleFilterTag(tag)">
+                    <span x-text="tag"></span><span style="opacity: 0.8;">✕</span>
+                </div>
+            </template>
+        </div>
+    </div>
+    <!-- 顶部右侧 -->
+    <div style="display: flex; align-items: center; gap: 0.5rem;">
+        <div x-show="selectedIds.length > 0" class="flex items-center gap-4 border px-3 py-1 rounded-lg mr-2"
+            style="background-color: var(--accent-faint); border-color: var(--accent-light);">
+            <button @click.stop="openBatchTagModal()" class="text-xs px-2 py-1 rounded text-white"
+                style="background-color: #7c3aed;">
+                批量标签
+            </button>
+            <button @click="deleteSelectedCards()"
+                class="text-xs bg-red-800 hover:bg-red-700 px-2 py-1 rounded text-white border border-red-600/50">
+                🗑️ 移至回收站
+            </button>
+            <span class="text-sm text-accent">已选 <span x-text="selectedIds.length" class="font-bold"></span></span>
+            <button @click="selectedIds = []" class="text-xs hover:text-white cursor-pointer"
+                style="color: var(--text-sub);">取消</button>
+        </div>
+        <!-- 搜索组合框 -->
+        <div class="search-container ml-auto mr-4">
+            <select x-show="currentMode === 'cards'" x-model="searchType" class="search-select">
+                <option value="mix">✨ 智能混合</option>
+                <option value="global">🌍 全局关键字</option>
+                <option value="name">👤 角色名称</option>
+                <option value="filename">📄 文件名</option>
+                <option value="creator">🎨 创作者</option>
+                <option value="tags">🏷️ 标签</option>
+            </select>
+            <input x-show="currentMode === 'cards'" type="text" x-model.debounce.300ms="searchQuery"
+                placeholder="搜索角色卡..." class="search-input">
+            <input x-show="currentMode === 'worldinfo'" type="text" x-model.debounce.300ms="wiSearchQuery"
+                placeholder="搜索世界书名称..."
+                class="search-input">
+            <button x-show="searchQuery" @click="searchQuery=''"
+                style="background: transparent; color: var(--text-dim); border: none; padding: 0 0.5rem; cursor: pointer;">✕</button>
+        </div>
+        <!-- === 随机抽卡按钮 === -->
+        <button @click="currentMode === 'cards' ? randomCard() : randomWorldInfo()"
+            :title="currentMode === 'cards' ? '🎲 手气不错，随机角色' : '🎲 手气不错，随机世界书'"
+            class="hover:scale-110 transition-transform active:rotate-180 duration-300"
+            style="margin-left: 0.5rem; margin-right: 0.5rem; padding: 0.5rem; background: linear-gradient(135deg, var(--accent-main), #7c3aed); border: 1px solid var(--accent-light); border-radius: 0.5rem; cursor: pointer; color: white; display: flex; align-items: center; justify-content: center;">
+            🎲
+        </button>
+        <!-- === 从url导入 === -->
+        <button @click="if(currentMode==='cards') showImportUrlModal=true; else alert('暂不支持世界书URL导入')"
+            :class="currentMode === 'cards' ? 'btn-secondary' : 'opacity-50 cursor-not-allowed btn-secondary'"
+            title="导入 (仅角色卡可用)" class="btn-secondary" style="padding: 0.5rem;">
+            🌐
+        </button>
+        <!-- === 刷新页面 === -->
+        <button @click="currentMode === 'cards' ? fetchCards() : fetchWorldInfoList()" title="刷新"
+            class="btn-secondary" style="padding: 0.5rem;">
+            ↻
+        </button>
+        <!-- 日月切换按钮 -->
+        <button @click="toggleDarkMode()" :title="isDarkMode ? '切换到浅色模式' : '切换到深色模式'" class="btn-secondary"
+            style="padding: 0.5rem; margin-right: 0.5rem;">
+            <span x-text="isDarkMode ? '🌙' : '☀️'"></span>
+        </button>
+        <!-- === 设置 === -->
+        <button @click="openSettings()" title="系统设置" class="btn-secondary"
+            style="margin-left: 0.5rem; padding: 0.5rem;">
+            ⚙️
+        </button>
+    </div>
+</div>

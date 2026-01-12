@@ -1,0 +1,271 @@
+/**
+ * static/js/utils/wiHelpers.js
+ * 世界书通用操作逻辑 (Mixin)
+ */
+
+import { createSnapshot as apiCreateSnapshot, openPath } from '../api/system.js';
+import { getCleanedV3Data } from './data.js';
+
+export const wiHelpers = {
+
+    // 获取 WI 数组引用 (兼容 V2/V3)
+    getWIArrayRef() {
+        // 确保 character_book 对象存在
+        if (!this.editingData.character_book) {
+            this.editingData.character_book = { entries: [], name: "World Info" };
+        }
+        
+        let cb = this.editingData.character_book;
+        
+        // 兼容 V2 数组格式 -> 转为对象
+        if (Array.isArray(cb)) {
+            const oldEntries = cb;
+            this.editingData.character_book = {
+                entries: oldEntries,
+                name: this.editingData.char_name || "World Info"
+            };
+            cb = this.editingData.character_book;
+        }
+        
+        // 兼容 V3 对象格式 (entries 可能是 dict) -> 转为数组
+        if (cb.entries && !Array.isArray(cb.entries)) {
+            cb.entries = Object.values(cb.entries);
+        }
+        if (!cb.entries) cb.entries = [];
+        // 过滤掉 null 或 undefined 的条目，防止崩坏
+        cb.entries = cb.entries.filter(e => e !== null && e !== undefined && typeof e === 'object');
+        return cb.entries;
+    },
+
+    getWorldInfoCount() {
+        return this.getWIArrayRef().length;
+    },
+
+    getWiStatusClass(entry) {
+        if (!entry.enabled) return 'wi-status-disabled';
+        if (entry.constant) return 'wi-status-constant';
+        if (entry.vectorized) return 'wi-status-vector';
+        return 'wi-status-normal';
+    },
+
+    // 基础 CRUD
+    addWiEntry() {
+        const arr = this.getWIArrayRef();
+        // 创建新条目
+        arr.push({
+            id: Math.floor(Math.random() * 1000000),
+            comment: "新条目",
+            content: "",
+            keys: ["关键词"],
+            secondary_keys: [],
+            enabled: true,
+            constant: false,
+            vectorized: false,
+            insertion_order: 100,
+            position: 1,
+            role: null,
+            depth: 4,
+            selective: true,
+            selectiveLogic: 0,
+            preventRecursion: false,
+            excludeRecursion: false,
+            delayUntilRecursion: 0,
+            ignoreBudget: false,
+            probability: 100,
+            useProbability: true
+        });
+        // 滚动并选中
+        this.$nextTick(() => {
+            const container = document.querySelector('.wi-list-container');
+            if (container) container.scrollTop = container.scrollHeight;
+            this.currentWiIndex = arr.length - 1;
+            this.isEditingClipboard = false;
+        });
+    },
+
+    removeWiEntry(index) {
+        if (index === undefined || index === null || index < 0) return;
+        if (!confirm("确定要删除这条世界书内容吗？")) return;
+        
+        const arr = this.getWIArrayRef();
+        arr.splice(index, 1);
+        
+        // 防止溢出
+        if (this.currentWiIndex >= arr.length) {
+            this.currentWiIndex = Math.max(0, arr.length - 1);
+        }
+    },
+
+    moveWiEntry(index, direction) {
+        const arr = this.getWIArrayRef();
+        const newIndex = index + direction;
+        if (newIndex < 0 || newIndex >= arr.length) return;
+        
+        const temp = arr[index];
+        arr[index] = arr[newIndex];
+        arr[newIndex] = temp;
+        
+        // 跟随选中
+        if (this.currentWiIndex === index) this.currentWiIndex = newIndex;
+    },
+
+    createSnapshot(forceType = null) {
+        let type, targetId, path, content, name;
+
+        // 场景 A: 角色卡详情页 (detailModal)
+        if (this.activeCard && this.activeCard.id && !this.showFullScreenWI) {
+            type = 'card';
+            targetId = this.activeCard.id;
+            path = "";
+            name = this.activeCard.char_name || this.activeCard.filename;
+            // 实时获取编辑器中的数据
+            if (this.editingData) {
+                content = getCleanedV3Data(this.editingData);
+            }
+        } 
+        // 场景 B: 世界书编辑器/弹窗 (wiEditor, wiDetailPopup)
+        else {
+            const contextItem = this.editingWiFile || this.activeWiDetail;
+            if (!contextItem) {
+                console.error("createSnapshot: No context item found.");
+                return;
+            }
+            type = (contextItem.type === 'embedded') ? 'embedded' : 'lorebook';
+            // 如果是 embedded，快照目标是宿主卡片
+            targetId = (type === 'embedded') ? contextItem.card_id : contextItem.id;
+            path = contextItem.path || "";
+            name = contextItem.name || "World Info";
+
+            // 如果在编辑器模式下，尝试获取实时内容
+            if (this.showFullScreenWI && typeof this._getAutoSavePayload === 'function') {
+                const payload = this._getAutoSavePayload();
+                content = payload.content;
+            }
+        }
+
+        if (!targetId) {
+            alert("无法确定快照目标 ID");
+            return;
+        }
+
+        // 配置项
+        const isSilent = this.$store.global.settingsForm.silent_snapshot;
+        const label = ""; // 默认无标签
+
+        if (!isSilent) {
+            if (!confirm(`确定为 "${name}" 创建备份快照吗？`)) return;
+            this.$store.global.isLoading = true;
+        }
+
+        apiCreateSnapshot({
+            id: targetId,
+            type: 'lorebook', // 无论前端识别为什么，后端 type='lorebook' 能处理 generic path，但为了准确：
+                              // 如果是 card context，还是传 card 比较好
+            type: (type === 'card' || type === 'embedded') ? 'card' : 'lorebook',
+            file_path: path,
+            label: label,
+            content: content, // 传递实时内容
+            compact: (type === 'lorebook') // 只有纯世界书才压缩 JSON，卡片通常不压缩
+        })
+        .then(res => {
+            if (!isSilent) this.$store.global.isLoading = false;
+            if (res.success) {
+                // 始终显示 Toast 反馈
+                this.$store.global.showToast("📸 快照已保存", 2000);
+            } else {
+                alert("备份失败: " + res.msg);
+            }
+        })
+        .catch(e => {
+            if (!isSilent) this.$store.global.isLoading = false;
+            alert("请求错误: " + e);
+        });
+    },
+
+    // 关键快照 (带标签)
+    createKeySnapshot(forceType) {
+        const label = prompt("请输入关键节点名称 (例如: 'v1.0'):");
+        if (label === null) return;
+
+        // 这里我们手动构造参数调用 apiCreateSnapshot，复用大部分逻辑
+        // 为了避免复制粘贴 createSnapshot 的上下文判断代码，
+        // 我们可以把 createSnapshot 改造成接受 label 参数，或者在这里重新判断一次上下文。
+        // 为了稳健，这里重新判断一次上下文 (复用 createSnapshot 的逻辑结构)。
+        
+        let type, targetId, path, content;
+
+        if (this.activeCard && this.activeCard.id && !this.showFullScreenWI) {
+            type = 'card';
+            targetId = this.activeCard.id;
+            path = "";
+            if (this.editingData) content = getCleanedV3Data(this.editingData);
+        } else {
+            const contextItem = this.editingWiFile || this.activeWiDetail;
+            if (!contextItem) return;
+            type = (contextItem.type === 'embedded') ? 'embedded' : 'lorebook';
+            targetId = (type === 'embedded') ? contextItem.card_id : contextItem.id;
+            path = contextItem.path || "";
+            if (this.showFullScreenWI && typeof this._getAutoSavePayload === 'function') {
+                content = this._getAutoSavePayload().content;
+            }
+        }
+
+        this.$store.global.isLoading = true;
+        apiCreateSnapshot({
+            id: targetId,
+            type: (type === 'card' || type === 'embedded') ? 'card' : 'lorebook',
+            file_path: path,
+            label: label,
+            content: content,
+            compact: (type === 'lorebook')
+        }).then(res => {
+            this.$store.global.isLoading = false;
+            if(res.success) this.$store.global.showToast("📸 关键快照已保存");
+            else alert(res.msg);
+        }).catch(e => {
+            this.$store.global.isLoading = false;
+            alert(e);
+        });
+    },
+
+    // 通用打开备份目录
+    openBackupFolder() {
+        let isEmbedded = false;
+        let isCard = false;
+        let targetName = "";
+        
+        // 辅助：提取文件名
+        const extractName = (str) => {
+            if (!str) return "";
+            return str.split('/').pop().replace(/\.[^/.]+$/, "").replace(/[\\/:*?"<>|]/g, '_').trim();
+        };
+
+        if (this.activeCard && this.activeCard.id && !this.showFullScreenWI) {
+            // 角色卡模式
+            isCard = true;
+            targetName = extractName(this.activeCard.filename);
+        } else {
+            // 世界书模式
+            const item = this.editingWiFile || this.activeWiDetail;
+            if (!item) return;
+            
+            if (item.type === 'embedded') {
+                isEmbedded = true;
+                // 内嵌：从 ID (embedded::card/path) 中提取
+                targetName = extractName(item.card_id);
+            } else {
+                targetName = extractName(item.path || item.name);
+            }
+        }
+
+        let base = (isCard || isEmbedded) ? `data/system/backups/cards` : `data/system/backups/lorebooks`;
+        let specific = targetName ? `${base}/${targetName}` : base;
+
+        openPath({ path: specific, relative_to_base: true }).then(res => {
+            if(!res.success) {
+                // 如果特定目录不存在，尝试打开上一级
+                openPath({ path: base, relative_to_base: true });
+            }
+        });
+    }
+};

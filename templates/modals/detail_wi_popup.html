@@ -1,0 +1,45 @@
+<!-- 世界书详情页模态框 (WI Detail Modal) -->
+<div x-data="wiDetailPopup" x-show="showWiDetailModal" x-cloak class="modal-overlay z-top-modal">
+    <div
+        class="bg-[var(--bg-panel)] border border-[var(--border-light)] rounded-lg shadow-2xl p-6 w-[500px] flex flex-col gap-4 text-[var(--text-main)]">
+        <div class="flex justify-between items-start border-b border-[var(--border-light)] pb-4">
+            <div class="flex items-center gap-3">
+                <span class="text-4xl">📖</span>
+                <div>
+                    <h3 class="text-lg font-bold" x-text="activeWiDetail?.name"></h3>
+                    <div class="flex gap-2 mt-1">
+                        <span class="wi-badge" :class="activeWiDetail?.type" x-text="activeWiDetail?.type"></span>
+                        <span class="text-xs text-gray-500"
+                            x-text="new Date(activeWiDetail?.mtime * 1000).toLocaleString()"></span>
+                    </div>
+                </div>
+            </div>
+            <button @click="showWiDetailModal=false" class="text-gray-500 hover:text-white">✕</button>
+        </div>
+
+        <div class="grid grid-cols-2 gap-3">
+            <button @click="enterWiEditorFromDetail()"
+                class="col-span-2 btn-primary py-3 rounded-lg flex items-center justify-center gap-2 text-lg">
+                <span>✏️</span> 进入编辑器
+            </button>
+
+            <button @click="createSnapshot('lorebook')"
+                class="btn-secondary py-2 flex flex-col items-center justify-center gap-1">
+                <span>📸</span> <span>快速快照</span>
+            </button>
+            <button @click="createKeySnapshot('lorebook')"
+                class="btn-secondary py-2 flex flex-col items-center justify-center gap-1">
+                <span>🔖</span> <span>关键快照</span>
+            </button>
+
+            <button @click="openRollback('lorebook')"
+                class="btn-secondary py-2 flex flex-col items-center justify-center gap-1 text-yellow-500">
+                <span>⏪</span> <span>时光机 (回滚)</span>
+            </button>
+            <button @click="openBackupFolder('lorebook')"
+                class="btn-secondary py-2 flex flex-col items-center justify-center gap-1">
+                <span>📂</span> <span>打开备份目录</span>
+            </button>
+        </div>
+    </div>
+</div>

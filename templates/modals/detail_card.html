@@ -1,0 +1,741 @@
+<!-- 详情页模态框 (Refactored) -->
+<div x-show="showDetail" x-data="detailModal" x-cloak class="modal-overlay" @click.self="showDetail=false">
+
+    <div class="detail-modal" @click.stop>
+        <!-- 左侧外悬浮：SKINS（不遮挡图片） -->
+        <div class="detail-filmstrip-outside custom-scrollbar"
+            x-show="showDetail && !isCardFlipped && skinImages.length > 0"
+            x-transition:enter="transition ease-out duration-300" x-transition:enter-start="opacity-0 -translate-x-4"
+            x-transition:enter-end="opacity-100 translate-x-0">
+            <div class="detail-filmstrip-title">SKINS</div>
+
+            <!-- 主图 -->
+            <button type="button" @click="currentSkinIndex=-1" class="detail-thumb"
+                :class="currentSkinIndex === -1 ? 'active-main' : ''">
+                <img :src="activeCard.image_url" alt="Main">
+                <span class="detail-thumb-label">Main</span>
+            </button>
+
+            <!-- 皮肤列表 -->
+            <template x-for="(skin, idx) in skinImages" :key="skin">
+                <button type="button" @click="currentSkinIndex=idx" class="detail-thumb"
+                    :class="currentSkinIndex === idx ? 'active-skin' : ''" :title="skin">
+                    <!-- 使用 getSkinUrl 函数，并添加 x-show 确保 URL 有效才渲染 -->
+                    <img :src="getSkinUrl(skin)" x-show="getSkinUrl(skin)" loading="lazy" alt="Skin"
+                        onerror="this.style.display='none'">
+                    <span class="detail-thumb-label" x-text="skin.length > 10 ? '...'+skin.slice(-8) : skin"></span>
+                </button>
+            </template>
+        </div>
+
+        <div class="detail-modal-inner">
+            <!-- 左侧：图片 / 元数据 / 缩放 / 版本条 -->
+            <section class="detail-left" x-data="{
+                        isPanning: false,
+                        startX: 0,
+                        startY: 0,
+                        scrollLeft: 0,
+                        scrollTop: 0
+                    }" @mouseleave="isPanning=false">
+
+                <!-- 图片视口 -->
+                <div class="detail-image-area">
+
+                    <!-- 图片滚动容器 -->
+                    <div x-show="!isCardFlipped" class="detail-image-scroll custom-scrollbar" x-ref="imgWrapper"
+                        @wheel.prevent="handleWheelZoom($event)" @mousedown="isPanning = true;
+                                startX = $event.pageX - $refs.imgWrapper.offsetLeft;
+                                startY = $event.pageY - $refs.imgWrapper.offsetTop;
+                                scrollLeft = $refs.imgWrapper.scrollLeft;
+                                scrollTop = $refs.imgWrapper.scrollTop" @mousemove="if(isPanning) {
+                                $refs.imgWrapper.scrollLeft = scrollLeft - ($event.pageX - $refs.imgWrapper.offsetLeft - startX);
+                                $refs.imgWrapper.scrollTop = scrollTop - ($event.pageY - $refs.imgWrapper.offsetTop - startY);
+                            }" @mouseup="isPanning=false" @dragstart.prevent>
+
+                        <img :src="displayImageUrl"
+                            :style="'width: ' + zoomLevel + '%; min-width: ' + zoomLevel + '%; max-width: none;'"
+                            class="detail-image" draggable="false"
+                            onerror="this.onerror=null; this.src='/static/images/default_card.png';" alt="Card Image">
+                    </div>
+
+                    <!-- 元数据面板 -->
+                    <div x-show="isCardFlipped" class="detail-metadata">
+                        <div class="detail-metadata-header">
+                            <div class="flex items-center gap-2">
+                                <span class="text-accent font-bold">📦 METADATA</span>
+                                <span class="text-xs" style="color: var(--text-dim);">只读预览</span>
+                            </div>
+                            <button @click="isCardFlipped=false" class="btn-secondary"
+                                style="padding:0.25rem 0.75rem; font-size:0.75rem;">
+                                ↩ 返回图片
+                            </button>
+                        </div>
+                        <pre class="detail-metadata-body custom-scrollbar" x-text="rawMetadataContent"></pre>
+                    </div>
+
+                    <!-- 左侧工具条（悬浮） -->
+                    <div class="detail-left-toolbar">
+                        <button x-show="!isCardFlipped" @click.stop="flipCard()" class="btn-secondary detail-icon-btn"
+                            title="查看元数据">
+                            ℹ️
+                        </button>
+
+                        <button x-show="!isCardFlipped" @click.stop="triggerImageUpload()"
+                            class="btn-secondary detail-icon-btn" title="更换图片">
+                            📷
+                        </button>
+                    </div>
+
+                    <!-- 缩放条（底部悬浮） -->
+                    <div x-show="!isCardFlipped" class="detail-zoombar">
+                        <button @click.stop="modifyZoom(-20)" class="detail-zoom-btn">−</button>
+
+                        <input type="range" min="20" max="500" step="10" x-model.number="zoomLevel"
+                            class="detail-zoom-range" @click.stop>
+
+                        <button @click.stop="modifyZoom(20)" class="detail-zoom-btn">+</button>
+
+                        <span class="detail-zoom-text" x-text="zoomLevel + '%'"></span>
+
+                        <button @click.stop="zoomLevel=100" class="detail-zoom-reset" title="重置">
+                            ↺
+                        </button>
+                    </div>
+
+                </div>
+
+                <!-- 版本条：Bundle 模式 -->
+                <div x-show="!isCardFlipped && activeCard.is_bundle" @wheel.prevent="$el.scrollLeft += $event.deltaY"
+                    class="detail-versions custom-scrollbar flex items-center px-4 overflow-x-auto bg-black/20 border-t border-white/10">
+
+                    <div class="detail-versions-title mr-2">VERSIONS</div>
+
+                    <template x-for="ver in activeCard.versions" :key="ver.id">
+                        <div class="detail-version-thumb-btn group relative"
+                            :class="editingData.id === ver.id ? 'active' : ''" @click="switchVersion(ver.id)">
+
+                            <!-- 缩略图 -->
+                            <img :src="'/api/thumbnail/' + encodeURIComponent(ver.id)" class="detail-version-img"
+                                loading="lazy" onerror="this.src='/static/images/default_card.png'">
+
+                            <!-- 设为封面按钮 (仅在非当前首图时显示，或者一直显示供调整) -->
+                            <button @click.stop="setAsBundleCover(ver.id)" class="detail-version-set-cover"
+                                title="设为最新/封面 (更新时间)">
+                                ★
+                            </button>
+
+                            <!-- 文件名覆盖层 -->
+                            <div class="detail-version-overlay" x-text="getVersionName(ver.filename)"></div>
+                        </div>
+                    </template>
+                </div>
+
+                <!-- 隐藏的 Input -->
+                <input type="file" x-ref="imageInput" @change="handleImageUpload" accept="image/*"
+                    style="display:none;">
+            </section>
+
+            <!-- 右侧：信息 + Tab -->
+            <section class="detail-right" x-data="{ tab: 'basic', showFirstPreview: false }">
+
+                <!-- 顶部栏：标题 / token / 快捷操作 -->
+                <header class="detail-topbar">
+                    <!-- 关闭按钮改为真正右上角 -->
+                    <button @click="showDetail=false" class="btn-secondary detail-close-floating" title="关闭">✕</button>
+
+                    <div class="detail-title-block">
+                        <div class="detail-title-row">
+                            <div class="detail-title-label">角色名称</div>
+
+                            <!-- 名称 -->
+                            <div class="detail-title-inline">
+                                <input type="text" x-model="editingData.char_name" class="detail-title-input">
+                            </div>
+                        </div>
+
+                        <div class="detail-subrow">
+                            <span class="detail-link-icon">🔗</span>
+                            <input type="text" x-model="editingData.source_link" placeholder="来源链接 (http://...)"
+                                class="detail-link-input">
+                            <a x-show="editingData.source_link" :href="editingData.source_link" target="_blank"
+                                class="detail-open-link" title="打开链接">↗ 打开</a>
+                        </div>
+                    </div>
+
+                    <!-- Token 显示 (放在中间偏右) -->
+                    <div class="topbar-token" title="预估 Token（含世界书）">
+                        <span class="topbar-token-label">Tokens</span>
+                        <span class="topbar-token-value"
+                            :class="totalTokenCount > 20000 ? 'danger' : (totalTokenCount > 5000 ? 'warn' : 'ok')"
+                            x-text="totalTokenCount"></span>
+                    </div>
+
+                    <!-- 修改时间显示 -->
+                    <div class="topbar-token border-r-0 pl-3 ml-2 border-l border-[var(--border-light)]" title="最后修改时间">
+                        <span class="topbar-token-label">Last Modified</span>
+                        <span class="text-xs font-mono font-bold" style="color: var(--text-main);"
+                            x-text="formatDate(activeCard.last_modified)"></span>
+                    </div>
+
+                    <div class="detail-top-actions">
+                        <div class="detail-actions-row">
+                            <button @click="createSnapshot('card')" @contextmenu.prevent="createKeySnapshot('card')"
+                                class="btn-secondary detail-action-btn detail-snapshot-btn" title="左键: 快照 | 右键: 关键快照">📸
+                                快照</button>
+
+                            <button @click="saveChanges()" :disabled="isSaving"
+                                class="btn-primary detail-action-btn detail-save-btn">
+                                <span x-text="isSaving ? '保存中...' : '💾 保存'"></span>
+                            </button>
+                        </div>
+                    </div>
+                </header>
+
+                <!-- 二级：资源目录条（更清晰） -->
+                <div class="detail-resourcebar">
+                    <div class="detail-resource-left">
+                        <div class="detail-resource-title">📁 资源目录</div>
+                        <div class="detail-resource-path">
+                            <template x-if="editingData.resource_folder">
+                                <span class="detail-chip" x-text="editingData.resource_folder"></span>
+                            </template>
+                            <template x-if="!editingData.resource_folder">
+                                <span class="detail-muted">未设置资源目录</span>
+                            </template>
+                        </div>
+                    </div>
+
+                    <div class="detail-resource-actions">
+                        <button @click="openResourceFolder()" x-show="editingData.resource_folder"
+                            class="btn-secondary detail-mini-btn" title="浏览资源目录">
+                            🔍 浏览
+                        </button>
+                        <button @click="createResourceFolder()" x-show="!editingData.resource_folder"
+                            class="btn-secondary detail-mini-btn" title="创建资源目录">
+                            ✨ 创建
+                        </button>
+                        <button @click="showSetResourceFolderModal=true" class="btn-secondary detail-mini-btn"
+                            title="设置资源目录">
+                            ⚙️ 设置
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Tab 栏 -->
+                <nav class="detail-tabs">
+                    <button class="detail-tab" :class="tab==='basic' ? 'active' : ''" @click="tab='basic'">📝
+                        基础</button>
+                    <button class="detail-tab" :class="tab==='dialog' ? 'active' : ''" @click="tab='dialog'">💬
+                        对话</button>
+                    <button class="detail-tab" :class="tab==='tags' ? 'active' : ''" @click="tab='tags'">🏷️
+                        标签</button>
+                    <button class="detail-tab" :class="tab==='wi' ? 'active' : ''" @click="tab='wi'">🌎 世界书</button>
+                    <button class="detail-tab" :class="tab==='manage' ? 'active' : ''" @click="tab='manage'">🧰
+                        管理</button>
+                </nav>
+
+                <!-- 内容区（滚动） -->
+                <div class="detail-content custom-scrollbar">
+
+                    <!-- TAB: 基础 -->
+                    <section x-show="tab==='basic'" x-transition.opacity class="detail-section detail-section-fill">
+                        <div class="detail-tab-scroll custom-scrollbar">
+                            <div class="detail-card">
+                                <div class="detail-card-head">
+                                    <div class="detail-card-title flex items-center gap-2"
+                                        style="color: var(--accent-light);">
+                                        <span class="note-label-icon">📌</span>
+                                        <span>本地备注 (Local Note)</span>
+                                    </div>
+                                    <button class="expand-btn" @click="openLargeEditor('ui_summary','本地备注')">⤢</button>
+                                </div>
+                                <textarea x-model="editingData.ui_summary" class="form-textarea note-textarea"
+                                    style="height: 10rem; resize:none;" placeholder="这是仅存储在本地的私有备注，不会写入角色卡文件...">
+                                    </textarea>
+                            </div>
+
+                            <div class="detail-card">
+                                <div class="detail-card-head">
+                                    <div class="detail-card-title">原简介 (Description)</div>
+                                    <button class="expand-btn" @click="openLargeEditor('description','原简介')">⤢</button>
+                                </div>
+                                <textarea x-model="editingData.description" class="form-textarea"
+                                    style="height: 10rem; resize:none;"></textarea>
+                            </div>
+                        </div>
+                    </section>
+
+                    <!-- TAB: 对话 -->
+                    <section x-show="tab==='dialog'" x-transition.opacity class="detail-section detail-section-fill">
+                        <div class="detail-tab-scroll custom-scrollbar">
+                            <!-- First Message：编辑/预览 -->
+                            <div class="detail-card detail-card--lg">
+                                <div class="detail-card-head detail-card-head-row">
+                                    <div class="detail-card-title">开场白 (First Message)</div>
+                                    <div class="detail-card-actions">
+                                        <button class="expand-btn"
+                                            @click="openLargeEditor('first_mes','开场白')">⤢</button>
+                                        <div class="toggle-btn-group">
+                                            <button class="toggle-btn" :class="!showFirstPreview ? 'active' : ''"
+                                                @click="showFirstPreview=false">编辑</button>
+                                            <button class="toggle-btn" :class="showFirstPreview ? 'active' : ''"
+                                                @click="showFirstPreview=true">HTML预览</button>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <textarea x-show="!showFirstPreview" x-model="editingData.first_mes"
+                                    class="form-textarea" style="height: 10rem; resize:none;"></textarea>
+
+                                <div x-show="showFirstPreview" class="form-textarea custom-scrollbar"
+                                    style="height: 10rem; background: var(--bg-panel); border-color: var(--accent-main); padding: 0; overflow: auto;"
+                                    x-effect="updateShadowContent($el, showFirstPreview ? editingData.first_mes : null)">
+                                </div>
+                            </div>
+
+                            <!-- Mes Example -->
+                            <div class="detail-card">
+                                <div class="detail-card-head">
+                                    <div class="detail-card-title">对话示例 (Mes Example)</div>
+                                    <button class="expand-btn" @click="openLargeEditor('mes_example','对话示例')">⤢</button>
+                                </div>
+                                <textarea x-model="editingData.mes_example" class="form-textarea"
+                                    style="height: 10rem; resize:none; font-family: monospace; font-size: 0.85rem;"></textarea>
+                            </div>
+
+                            <!-- Alternate Greetings -->
+                            <div class="detail-card detail-card--sm">
+                                <div class="detail-card-head detail-card-head-row">
+                                    <div class="detail-card-title">备用开场白 (Alternate Greetings)</div>
+
+                                    <div class="detail-card-actions">
+                                        <button class="expand-btn" x-show="editingData.alternate_greetings.length > 0"
+                                            @click="openLargeEditor('alternate_greetings','备用开场白 #' + (altIdx+1), true, altIdx)">⤢</button>
+
+                                        <div class="detail-alt-nav" x-show="editingData.alternate_greetings.length > 1">
+                                            <button @click="prevAlt()" class="detail-alt-btn">‹</button>
+                                            <span class="detail-alt-count"
+                                                x-text="(altIdx+1) + '/' + editingData.alternate_greetings.length"></span>
+                                            <button @click="nextAlt()" class="detail-alt-btn">›</button>
+                                        </div>
+
+                                        <button @click="removeAlt()" title="删除" class="btn-secondary detail-mini-btn"
+                                            style="color:#f87171;">🗑️</button>
+                                        <button @click="addAlt()" title="新增"
+                                            class="btn-primary detail-mini-btn">＋</button>
+                                    </div>
+                                </div>
+
+                                <template x-if="editingData.alternate_greetings.length > 0">
+                                    <textarea x-model="editingData.alternate_greetings[altIdx]" class="form-textarea"
+                                        style="height: 8rem; resize:none;" placeholder="在此输入备用开场白..."></textarea>
+                                </template>
+                            </div>
+                        </div>
+                    </section>
+
+                    <!-- TAB: 标签 -->
+                    <section x-show="tab==='tags'" x-transition.opacity class="detail-section custom-scrollbar">
+                        <div class="detail-card">
+                            <div class="detail-card-head detail-card-head-row">
+                                <div class="detail-card-title">标签 (Tags)</div>
+
+                                <div class="detail-card-actions">
+                                    <button @click="openTagPicker()" class="btn-secondary detail-mini-btn">
+                                        📚 标签库
+                                    </button>
+
+                                    <div class="detail-inline-input">
+                                        <input type="text" x-model="newTagInput" @keydown.enter.prevent="addTag()"
+                                            placeholder="自定义..." class="detail-inline-text">
+                                        <button @click="addTag()" class="detail-inline-add">+</button>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="detail-taglist">
+                                <template x-for="tag in editingData.tags" :key="tag">
+                                    <button type="button" @click="toggleTag(tag)" class="detail-tag">
+                                        <span x-text="tag"></span>
+                                        <span class="detail-tag-x">✕</span>
+                                    </button>
+                                </template>
+
+                                <div x-show="!editingData.tags || editingData.tags.length===0" class="detail-muted">
+                                    暂无标签...
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+
+                    <!-- TAB: 世界书（保留原有 WI 块功能，只做容器美化与收纳） -->
+                    <section x-show="tab==='wi'" x-transition.opacity class="detail-section detail-section-fill">
+                        <div class="detail-tab-scroll custom-scrollbar">
+                            <!-- 直接复用现有 WI 容器与内部逻辑（未删任何方法/字段） -->
+                            <div class="wi-container" x-data="{ wiOpen: true }">
+                                <input type="file" x-ref="wiImportInput" style="display:none" accept=".json,.jsonl"
+                                    @change="handleWiImport">
+
+                                <div class="wi-header group" @click="wiOpen = !wiOpen">
+                                    <div class="flex items-center gap-2 mr-3 pointer-events-none">
+                                        <span class="text-lg shadow-sm">🌎</span>
+                                        <div class="flex flex-col leading-none">
+                                            <span
+                                                class="text-orange-400 font-bold text-xs uppercase tracking-wider">World
+                                                Info</span>
+                                            <span class="text-[10px] text-gray-500 font-mono mt-0.5">
+                                                <span x-text="getWorldInfoCount()">0</span> 条目
+                                            </span>
+                                        </div>
+                                    </div>
+
+                                    <div class="flex-1 min-w-0 mx-2 relative group/input h-full flex items-center"
+                                        @click.stop>
+                                        <div class="w-[1px] h-6 mr-3" style="background: var(--border-light);">
+                                        </div>
+                                        <input type="text" x-model="editingData.character_book.name"
+                                            placeholder="未命名世界书..."
+                                            class="w-full bg-transparent text-sm font-medium outline-none border-b border-transparent transition-colors py-1"
+                                            style="color: var(--text-main);" title="世界书名称">
+                                    </div>
+
+                                    <div class="flex items-center gap-2 pl-2">
+                                        <div class="flex items-center gap-2" @click.stop>
+                                            <div class="flex rounded-lg p-0.5 border"
+                                                style="background: var(--bg-sub); border-color: var(--border-light);">
+                                                <button @click="$refs.wiImportInput.click()" title="导入"
+                                                    class="px-2 py-1 text-[10px] text-gray-400 hover:text-green-400 rounded transition-colors flex items-center gap-1">📂</button>
+                                                <div class="w-[1px] my-0.5" style="background: var(--border-light);">
+                                                </div>
+                                                <button @click="exportWorldBookSingle()" title="导出"
+                                                    class="px-2 py-1 text-[10px] text-gray-400 hover:text-blue-400 rounded transition-colors flex items-center gap-1">💾</button>
+                                            </div>
+
+                                            <button @click="openFullScreenWI()" title="全屏编辑" class="btn-primary"
+                                                style="padding: 0.35rem 0.75rem; font-size: 0.75rem; border-radius: 0.375rem;">
+                                                ⤢ 全屏
+                                            </button>
+                                        </div>
+
+                                        <div class="pl-2 ml-1 border-l h-6 flex items-center justify-center"
+                                            style="border-color: var(--border-light);">
+                                            <span
+                                                class="text-xs text-gray-500 transform transition-transform duration-300"
+                                                :class="wiOpen ? 'rotate-180 text-orange-400' : 'rotate-0 group-hover:text-gray-300'">
+                                                ▼
+                                            </span>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div x-show="wiOpen" x-cloak class="wi-content custom-scrollbar">
+                                    <!-- 以下 WI 内容：保持原来的功能 -->
+                                    <div class="flex justify-between items-center mb-3 px-1">
+                                        <span class="text-xs text-gray-500">提示: 调整 Order 可改变触发顺序</span>
+                                        <button @click="addWiEntry()"
+                                            class="text-xs bg-blue-600 hover:bg-blue-500 text-white px-3 py-1.5 rounded flex items-center gap-1 transition">
+                                            ➕ 新增条目
+                                        </button>
+                                    </div>
+
+                                    <div class="flex flex-col gap-2">
+                                        <template x-for="(entry, index) in getWIArrayRef()" :key="index">
+                                            <div x-data="{ expanded: false }"
+                                                class="border rounded-md overflow-hidden transition-all"
+                                                style="background: var(--bg-panel); border-color: var(--border-light);">
+                                                <div class="flex items-center gap-2 p-2 cursor-pointer select-none"
+                                                    style="background: var(--bg-sub);" @click="expanded = !expanded">
+                                                    <div @click.stop class="flex items-center">
+                                                        <input type="checkbox" x-model="entry.enabled"
+                                                            class="cursor-pointer w-4 h-4 rounded">
+                                                    </div>
+
+                                                    <div class="flex-1 min-w-0 flex flex-col">
+                                                        <div class="flex items-center gap-2">
+                                                            <span class="text-xs font-bold"
+                                                                style="color: var(--text-main);"
+                                                                x-text="entry.comment || '无备注'"></span>
+                                                            <span x-show="entry.constant"
+                                                                class="text-[10px] px-1 rounded border"
+                                                                style="background: var(--bg-tag); color: var(--accent-light); border-color: var(--accent-light);">Constant</span>
+                                                        </div>
+                                                        <div class="text-[10px] font-mono mt-0.5 break-all whitespace-normal"
+                                                            style="color: var(--text-dim); line-height: 1.2;">
+                                                            <span class="opacity-70">Keys:</span>
+                                                            <span x-text="formatWiKeys(entry.keys)"
+                                                                style="color: #ca8a04;"></span>
+                                                        </div>
+                                                    </div>
+
+                                                    <div class="flex items-center gap-1" @click.stop>
+                                                        <div class="flex flex-col mr-2">
+                                                            <button @click="moveWiEntry(index, -1)"
+                                                                class="text-[10px] text-gray-500 hover:text-white leading-none mb-1">▲</button>
+                                                            <button @click="moveWiEntry(index, 1)"
+                                                                class="text-[10px] text-gray-500 hover:text-white leading-none">▼</button>
+                                                        </div>
+                                                        <button @click="removeWiEntry(index)"
+                                                            class="text-gray-500 hover:text-red-400 p-1 rounded transition">🗑️</button>
+                                                        <button @click="expanded = !expanded"
+                                                            class="text-gray-500 hover:text-blue-400 p-1 transform transition-transform duration-200"
+                                                            :class="expanded ? 'rotate-180' : ''">▼</button>
+                                                    </div>
+                                                </div>
+
+                                                <div x-show="expanded" x-collapse class="p-3 border-t space-y-3"
+                                                    style="border-color: var(--border-light); background: var(--bg-panel);">
+
+                                                    <div class="grid grid-cols-6 gap-3">
+                                                        <div class="col-span-4">
+                                                            <label
+                                                                class="block text-[10px] text-purple-400 uppercase font-bold mb-1">触发关键字</label>
+                                                            <input type="text" :value="formatWiKeys(entry.keys)"
+                                                                @input="updateWiKeys(entry, $event.target.value)"
+                                                                class="form-input text-xs" style="color: #fde047;"
+                                                                placeholder="艾雅, Python">
+                                                        </div>
+                                                        <div class="col-span-2">
+                                                            <label
+                                                                class="block text-[10px] text-gray-500 uppercase font-bold mb-1">权重
+                                                                (Order)</label>
+                                                            <input type="number" x-model.number="entry.insertion_order"
+                                                                class="form-input text-xs">
+                                                        </div>
+                                                    </div>
+
+                                                    <div>
+                                                        <div class="flex justify-between items-center mb-1">
+                                                            <label
+                                                                class="text-[10px] text-green-400 uppercase font-bold">内容
+                                                                (Content)</label>
+                                                            <div class="text-[10px] text-gray-600">Token: <span
+                                                                    x-text="estimateTokens(entry.content)"></span>
+                                                            </div>
+                                                        </div>
+                                                        <textarea x-model="entry.content" rows="4"
+                                                            class="form-textarea text-xs font-mono custom-scrollbar break-all"
+                                                            placeholder="内容..." style="word-break: break-all;">
+                                                            </textarea>
+                                                    </div>
+
+                                                    <div class="flex items-center gap-4">
+                                                        <div class="flex-1">
+                                                            <label
+                                                                class="block text-[10px] text-gray-500 uppercase font-bold mb-1">备注</label>
+                                                            <input type="text" x-model="entry.comment"
+                                                                class="form-input text-xs" placeholder="仅作标记">
+                                                        </div>
+                                                        <div class="flex items-center pt-4">
+                                                            <label class="flex items-center gap-2 cursor-pointer">
+                                                                <input type="checkbox" x-model="entry.constant"
+                                                                    class="rounded w-4 h-4">
+                                                                <span class="text-xs text-accent">Constant
+                                                                    (常驻)</span>
+                                                            </label>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </template>
+
+                                        <div x-show="getWIArrayRef().length === 0"
+                                            class="text-center py-8 text-gray-600 border border-dashed border-gray-700 rounded-lg">
+                                            <p class="text-sm">暂无世界书条目</p>
+                                            <button @click="addWiEntry()"
+                                                class="mt-2 text-xs text-blue-400 hover:underline">点击添加第一条</button>
+                                        </div>
+                                    </div>
+
+                                    <div class="wi-raw-section" x-data="{ showRaw: false }">
+                                        <button
+                                            @click="showRaw = !showRaw; if(showRaw) editingData.character_book_raw = JSON.stringify(editingData.character_book, null, 2)"
+                                            class="text-[10px] underline flex items-center gap-1 transition-colors"
+                                            style="color: var(--text-dim);">
+                                            ⚙️ <span x-text="showRaw ? '隐藏原始数据' : '查看/编辑原始 JSON (Advanced)'"></span>
+                                        </button>
+                                        <div x-show="showRaw" class="mt-2">
+                                            <textarea x-model="editingData.character_book_raw"
+                                                class="wi-raw-textarea w-full h-40 custom-scrollbar"></textarea>
+                                            <button @click="if(applyCharacterBookJson()) showRaw=false"
+                                                class="btn-danger-xs">⚠ 应用 JSON 覆盖当前表格</button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+
+                    <!-- TAB: 管理 -->
+                    <section x-show="tab==='manage'" x-transition.opacity class="detail-section custom-scrollbar">
+                        <div class="detail-card">
+                            <div class="detail-card-head">
+                                <div class="detail-card-title">工具箱</div>
+                            </div>
+
+                            <div class="detail-toolbox">
+                                <div class="toolbox-group">
+                                    <div class="toolbox-title">📌 定位与文件</div>
+                                    <div class="toolbox-grid">
+                                        <button @click="locateCard()" class="toolbox-btn">🎯 跳转定位</button>
+                                        <button @click="openCardLocation()" class="toolbox-btn">📂 打开所在文件夹</button>
+                                    </div>
+                                </div>
+
+                                <div class="toolbox-group">
+                                    <div class="toolbox-title">🕰️ 备份与回滚</div>
+                                    <div class="toolbox-grid">
+                                        <button @click="openRollback('card')" class="toolbox-btn warn">⏪
+                                            时光机</button>
+                                        <button @click="openBackupFolder('card')" class="toolbox-btn">🗃️
+                                            打开备份目录</button>
+                                        <!-- <button @click="createSnapshot('card')"
+                                                @contextmenu.prevent="createKeySnapshot('card')"
+                                                class="toolbox-btn amber">📸 快照</button> -->
+                                    </div>
+                                </div>
+
+                                <div class="toolbox-group">
+                                    <div class="toolbox-title">🛠️ 高级</div>
+                                    <div class="toolbox-grid">
+                                        <button @click="openAdvancedEditor()" class="toolbox-btn purple">🛠️
+                                            高级扩展</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="detail-card">
+                            <div class="detail-card-head">
+                                <div class="detail-card-title">
+                                    <!-- 区分显示 -->
+                                    <span x-show="!activeCard.is_bundle">文件名</span>
+                                    <span x-show="activeCard.is_bundle">
+                                        <span style="color:#fbbf24;">角色包 (文件夹)</span> / 当前版本文件
+                                    </span>
+                                </div>
+                            </div>
+
+                            <!-- 普通模式：只显示一个输入框 -->
+                            <div x-show="!activeCard.is_bundle">
+                                <input type="text" x-model="editingData.filename" class="form-input">
+                            </div>
+
+                            <!-- 包模式：显示两个输入框 -->
+                            <div x-show="activeCard.is_bundle" class="flex flex-col gap-2">
+                                <!-- 1. 文件夹名 (对应 Bundle Name) -->
+                                <div class="flex items-center gap-2">
+                                    <span
+                                        class="text-xs w-16 text-yellow-500 font-bold text-right flex-shrink-0">文件夹:</span>
+                                    <!-- 显示当前文件夹路径，不可编辑 -->
+                                    <div
+                                        class="text-sm font-mono text-[var(--text-main)] px-2 py-1 bg-[var(--bg-sub)] rounded border border-[var(--border-light)] flex-1 truncate">
+                                        <span x-text="activeCard.bundle_dir"></span>
+                                    </div>
+                                    <!-- 独立的重命名按钮 -->
+                                    <button @click="renameFolderFromDetail(activeCard.bundle_dir)"
+                                        class="btn-secondary text-xs px-2 py-1 whitespace-nowrap">重命名</button>
+                                </div>
+
+                                <!-- 2. 当前版本文件名 -->
+                                <div class="flex items-center gap-2">
+                                    <span
+                                        class="text-xs w-16 text-blue-400 font-bold text-right flex-shrink-0">当前文件:</span>
+                                    <!-- 这个 input 绑定 editingData.filename，点击底部的“保存”按钮时生效 -->
+                                    <input type="text" x-model="editingData.filename"
+                                        class="form-input flex-1 font-mono text-sm">
+                                </div>
+                                <div class="detail-muted mt-1 text-xs">
+                                    提示: 修改 "当前文件" 将重命名包内的这张具体图片，需点击底部保存生效。
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="detail-card">
+                            <div class="detail-card-head">
+                                <div class="detail-card-title">更新角色卡 (Update)</div>
+                            </div>
+
+                            <div class="detail-manage-grid">
+                                <div class="detail-manage-box">
+                                    <div class="detail-manage-label">文件覆盖</div>
+                                    <div class="detail-muted">上传 PNG/JSON 覆盖或添加新版本（Bundle）</div>
+                                    <div class="detail-manage-actions">
+                                        <button @click="triggerCardUpdate()" class="btn-update-card btn-update-file">📂
+                                            文件覆盖</button>
+                                        <input type="file" x-ref="cardUpdateInput" @change="handleCardUpdate"
+                                            accept=".png,.json" style="display:none;">
+                                    </div>
+                                </div>
+
+                                <div class="detail-manage-box">
+                                    <div class="detail-manage-label">URL 更新</div>
+                                    <div class="detail-muted">从 PNG 直链更新（并写入来源链接）</div>
+                                    <div class="detail-manage-actions">
+                                        <button @click="triggerUrlUpdate()" class="btn-update-card btn-update-url">🌐
+                                            URL 更新</button>
+                                    </div>
+                                </div>
+
+                                <div class="detail-manage-box">
+                                    <div class="detail-manage-label">发送到 SillyTavern</div>
+                                    <div class="detail-muted">通过配置的 ST 地址发送当前卡</div>
+                                    <div class="detail-manage-actions">
+                                        <button id="btn-send-st" @click="sendToST()"
+                                            class="bg-indigo-600 hover:bg-indigo-500 text-white border border-indigo-500/50 px-4 py-2 rounded-lg cursor-pointer text-sm flex items-center gap-2 transition-all shadow-lg">
+                                            🚀 发送到 ST
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <div class="detail-manage-box danger">
+                                    <div class="detail-manage-label">删除</div>
+                                    <div class="detail-muted">移至回收站（可在设置页打开回收站目录）</div>
+                                    <div class="detail-manage-actions">
+                                        <button @click="deleteCards([activeCard.id])" class="btn-secondary"
+                                            style="border-color:#ef4444; color:#ef4444;">
+                                            🗑️ 移至回收站
+                                        </button>
+                                        <button x-show="activeCard.is_bundle" @click="unbundleCard()"
+                                            class="btn-secondary" style="border-color:#fbbf24; color:#fbbf24;">
+                                            💔 取消聚合
+                                        </button>
+                                    </div>
+                                </div>
+                                <div class="detail-manage-box" x-show="!activeCard.is_bundle">
+                                    <div class="detail-manage-label">转换为包模式</div>
+                                    <div class="detail-muted">创建文件夹并将此卡片移入，开启多版本管理</div>
+                                    <div class="detail-manage-actions">
+                                        <button @click="convertToBundle()" class="btn-secondary"
+                                            style="border-color: #f59e0b; color: #f59e0b;">
+                                            📦 转为包 (Bundle)
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <!-- 增加底部留白，防止滚动到底部太贴边 -->
+                        <div style="height: 1rem; flex-shrink: 0;"></div>
+                    </section>
+
+                    <div style="height: 1rem;"></div>
+                </div>
+
+            </section>
+        </div>
+    </div>
+    <div x-show="showSetResourceFolderModal" x-cloak class="modal-overlay z-[1000]" style="position: absolute;"
+        @click.stop>
+        <div style="background: var(--bg-panel); padding: 1.5rem; border-radius: 0.75rem; width: 25rem; border: 1px solid var(--border-light);"
+            @click.stop>
+            <h3 style="font-weight: bold; margin-bottom: 1rem;">设置资源目录</h3>
+            <div class="flex flex-col gap-2">
+                <div style="color: var(--text-dim); font-size: 0.875rem;">输入相对路径或绝对路径</div>
+                <input type="text" x-model="editingData.resource_folder" class="form-input">
+                <div class="flex gap-2">
+                    <button @click="showSetResourceFolderModal = false" class="btn-secondary flex-1">取消</button>
+                    <button @click="setResourceFolder(); showSetResourceFolderModal = false;"
+                        class="btn-primary flex-1 rounded">确定 (API保存)</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>

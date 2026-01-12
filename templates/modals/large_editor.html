@@ -1,0 +1,87 @@
+<!-- 大编辑器 -->
+<div x-show="showLargeEditor" x-cloak class="modal-overlay z-max-modal" @click.stop>
+    <div class="modal-container large-editor-container" style="width: 1000px; height: 90vh; max-width: 95vw;"
+        @click.away="saveLargeEditor()">
+        <!-- 顶部栏 -->
+        <div
+            style="padding: 1rem; border-bottom: 1px solid var(--border-light); display: flex; justify-content: space-between; align-items: center; background: var(--bg-sub); flex-shrink: 0;">
+            <div class="flex items-center gap-4">
+                <h3 class="font-bold flex items-center gap-2" style="font-size: 1.125rem;">
+                    <span>📝</span> <span x-text="largeEditorTitle"></span>
+                </h3>
+
+                <!-- === 左右切换导航栏 (仅在数组模式下显示) === -->
+                <div x-show="largeEditorIsArray"
+                    class="flex items-center ml-4 bg-[var(--bg-panel)] rounded p-1 border border-[var(--border-light)]">
+                    <button @click="prevLargeEditorItem()" class="large-editor-nav-btn" title="上一个 (自动保存)">◀</button>
+
+                    <!-- 显示索引进度 -->
+                    <span class="large-editor-nav-info">
+                        <span x-text="largeEditorIndex + 1"></span> /
+                        <span x-text="editingData[largeEditorField] ? editingData[largeEditorField].length : 0"></span>
+                    </span>
+
+                    <button @click="nextLargeEditorItem()" class="large-editor-nav-btn" title="下一个 (自动保存)">▶</button>
+                </div>
+                <!-- 模式切换按钮组 -->
+                <div class="flex items-center gap-2 bg-[var(--bg-sub)] border border-[var(--border-light)] rounded p-1">
+                    <!-- 编辑/预览 切换 -->
+                    <div class="toggle-btn-group">
+                        <button @click="markdownPreview = false" class="toggle-btn"
+                            :class="!markdownPreview ? 'active' : ''">编辑</button>
+                        <button @click="markdownPreview = true" class="toggle-btn"
+                            :class="markdownPreview ? 'active' : ''">预览</button>
+                    </div>
+
+                    <!-- 渲染格式切换 (仅在预览模式下显示) -->
+                    <div x-show="markdownPreview" class="w-[1px] h-4 bg-[var(--border-light)] mx-1"></div>
+                    <div x-show="markdownPreview" class="toggle-btn-group">
+                        <button @click="largeRenderMode = 'markdown'" class="toggle-btn"
+                            :class="largeRenderMode === 'markdown' ? 'active' : ''" title="Markdown 解析">MD</button>
+                        <button @click="largeRenderMode = 'html'" class="toggle-btn"
+                            :class="largeRenderMode === 'html' ? 'active' : ''" title="原生 HTML">HTML</button>
+                    </div>
+                </div>
+            </div>
+            <div class="flex gap-2">
+                <button @click="showLargeEditor=false"
+                    style="color: var(--text-dim); background: none; border: none; cursor: pointer; padding: 0.25rem 0.75rem;">取消
+                    (Esc)</button>
+                <button @click="saveLargeEditor()" class="btn-primary"
+                    style="padding: 0.35rem 1.25rem; border-radius: 0.375rem;">完成</button>
+            </div>
+        </div>
+
+        <!-- 内容区域 -->
+        <div
+            style="flex: 1; padding: 1rem; display: flex; flex-direction: column; overflow: hidden; background: var(--bg-panel); position: relative;">
+
+            <!-- 编辑模式 (Textarea) -->
+            <textarea x-show="!markdownPreview" x-model="largeEditorContent" @paste="handleNotePaste($event)"
+                class="large-editor-textarea custom-scrollbar"
+                :style="largeEditorField === 'mes_example' ? 'font-family: monospace; font-size: 0.9rem;' : ''"
+                placeholder="在此输入内容... (本地备注支持粘贴图片)" spellcheck="false"></textarea>
+
+            <!-- 预览模式：根据 largeRenderMode 决定传什么给 updateShadowContent -->
+            <!-- 
+                    逻辑：
+                    如果是 HTML 模式 -> 直接传 raw content
+                    如果是 MD 模式   -> 传 renderMarkdown(content)
+                -->
+            <div x-show="markdownPreview" class="flex-1 overflow-hidden relative"
+                style="background: var(--bg-panel); border-radius: 0.375rem;"
+                x-effect="updateShadowContent($el, markdownPreview ? (largeRenderMode === 'html' ? largeEditorContent : renderMarkdown(largeEditorContent)) : null)">
+            </div>
+
+            <div
+                style="text-align: right; color: var(--text-dim); font-size: 0.75rem; margin-top: 0.5rem; flex-shrink: 0;">
+                字数统计: <span x-text="largeEditorContent ? largeEditorContent.length : 0"></span>
+                <span
+                    x-show="['ui_summary', 'first_mes', 'mes_example', 'description'].includes(largeEditorField) && !markdownPreview"
+                    class="ml-2 text-blue-400">
+                    💡 支持 Markdown/HTML 渲染
+                </span>
+            </div>
+        </div>
+    </div>
+</div>
