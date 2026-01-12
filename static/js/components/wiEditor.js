@@ -412,12 +412,8 @@ export default function wiEditor() {
         // === 剪切板逻辑 ===
 
         loadWiClipboard() {
-            console.log("[Clipboard] 4. 请求加载列表...");
             clipboardList().then(res => {
-                if (res.success) {
-                    // 1. 打印原始数据，确认格式
-                    console.log("[Clipboard] Raw response items:", res.items);
-                    
+                if (res.success) {      
                     // 1. 先清空，给 Alpine 一个明确的信号
                     this.wiClipboardItems = [];
                     
@@ -458,8 +454,6 @@ export default function wiEditor() {
                 return;
             }
 
-            console.log("[Clipboard] 1. 准备复制原始数据:", targetData);
-
             // 2. 深度拷贝并清洗 (移除 Proxy，转为纯 JSON 对象)
             let copy;
             try {
@@ -478,8 +472,6 @@ export default function wiEditor() {
             // 4. 确保 content 字段存在
             if (copy.content === undefined || copy.content === null) copy.content = "";
 
-            console.log("[Clipboard] 2. 发送 Payload:", copy);
-
             // 5. 发送请求
             this._addWiClipboardRequest(copy);
         },
@@ -491,7 +483,6 @@ export default function wiEditor() {
             if (btn && !overwriteId) btn.innerText = '⏳...';
 
             clipboardAdd(entry, overwriteId).then(res => {
-                console.log("[Clipboard] 3. 后端响应:", res);
                 if (res.success) {
                     this.wiClipboardItems = [];
                     setTimeout(() => {
@@ -503,7 +494,6 @@ export default function wiEditor() {
                     
                     this.$store.global.showToast("📋 已复制到全局剪切板");
                 } else if (res.code === 'FULL') {
-                    console.warn("[Clipboard] Full");
                     this.wiClipboardOverwriteMode = true;
                     this.clipboardPendingEntry = entry;
                     if (!this.showWiClipboard) this.showWiClipboard = true;
