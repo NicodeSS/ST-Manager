@@ -20,7 +20,7 @@
         <div x-show="!isLoading"
             class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-4">
             <template x-for="item in wiList" :key="item.id">
-                <div @click="openWorldInfoEditor(item)"
+                <div @click="openWiDetail(item)"
                     class="group relative border rounded-lg p-4 cursor-pointer hover:-translate-y-1 transition-all duration-200 flex flex-col h-40"
                     style="background: var(--bg-panel); border-color: var(--border-main); box-shadow: 0 4px 6px -1px var(--shadow-color);">
 
@@ -28,9 +28,12 @@
                     <div class="wi-badge" :class="item.type"
                         x-text="item.type === 'global' ? 'GLOBAL' : (item.type === 'resource' ? 'RESOURCE' : 'EMBEDDED')">
                     </div>
-                    <!-- 【新增】详情按钮 (阻止冒泡，点击进入详情查看页) -->
-                    <button @click.stop="openWiDetail(item)" class="wi-info-btn" title="查看详情 / 历史版本">
-                        ℹ️
+                    <!-- 编辑按钮 -->
+                    <button @click.stop="openWorldInfoEditor(item)" 
+                        class="absolute top-3 right-3 w-8 h-8 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all duration-200 z-20 shadow-md transform hover:scale-110"
+                        style="background: var(--bg-sub); border: 1px solid var(--border-light); color: var(--accent-main);"
+                        title="打开全屏编辑器">
+                        ✏️
                     </button>
                     <!-- === 如果是文件名兜底，显示 FILE 徽标，和世界书名区分 === -->
                     <div x-show="item.name_source === 'filename'" class="wi-badge file"
