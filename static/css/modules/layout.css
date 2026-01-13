@@ -1,0 +1,124 @@
+/* =========================================
+   4. 布局结构 (Layout)
+   ========================================= */
+.main-container {
+    display: flex;
+    flex: 1;
+    overflow: hidden;
+    /* 使用 rgba 叠加背景色，利用 --bg-overlay-opacity 控制透出多少背景图 */
+    background-color: color-mix(in srgb, var(--bg-body), transparent calc(100% - var(--bg-overlay-opacity) * 100%));
+    backdrop-filter: blur(var(--bg-blur));
+}
+.content-area { 
+    flex: 1; display: flex; flex-direction: column; 
+    background-color: transparent;
+    position: relative; 
+}
+.header-bar { 
+    height: 64px;
+    background-color: color-mix(in srgb, var(--bg-panel), transparent 10%);
+    backdrop-filter: blur(10px);
+    border-bottom: 1px solid var(--border-main); 
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 1.5rem; flex-shrink: 0; 
+}
+.sidebar {
+    width: 300px;
+    background-color: color-mix(in srgb, var(--bg-panel), transparent 10%); 
+    backdrop-filter: blur(10px);
+    border-right: 1px solid var(--border-main);
+    display: flex;
+    flex-direction: column;
+    flex-shrink: 0;
+}
+
+.sidebar-content {
+    overflow-y: auto; overflow-x: hidden;
+    background-color: var(--bg-panel);
+}
+
+.sidebar-section-header {
+    padding: 0.75rem;
+    border-bottom: 1px solid var(--border-main);
+    border-top: 1px solid var(--border-main); /* 也就是原来的 border-top/bottom */
+    display: flex; justify-content: space-between; align-items: center;
+    background-color: var(--bg-sub); /* 表头稍微区分一下背景 */
+}
+
+.folder-item {
+    position: relative;
+    transition: all 0.2s ease;
+    color: var(--text-sub);
+}
+.folder-item:hover {
+    background-color: var(--bg-hover);
+    color: var(--text-main);
+}
+/* 选中状态 */
+.folder-item.active {
+    background-color: var(--accent-main);
+    color: #ffffff;
+}
+/* 拖拽悬停 */
+.folder-item.drag-over {
+    background-color: var(--accent-faint) !important;
+    border: 2px dashed var(--accent-main) !important;
+    transform: scale(1.02);
+}
+/* 侧边栏标签云 */
+.sidebar-tag-cloud { display: flex; flex-wrap: wrap; gap: 0.35rem; padding: 0.5rem; }
+.sidebar-tag-chip {
+    font-size: 0.7rem; padding: 0.15rem 0.5rem; border-radius: 9999px;
+    background: var(--bg-tag); 
+    color: var(--text-sub); 
+    border: 1px solid var(--border-light);
+    cursor: pointer; transition: all 0.1s; 
+    max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.sidebar-tag-chip:hover { 
+    background: var(--bg-hover); 
+    color: var(--text-main); 
+    border-color: var(--text-sub);
+}
+.sidebar-tag-chip.active {
+    background: var(--accent-main) !important;
+    color: #ffffff !important;
+    border-color: var(--accent-light) !important;
+}
+/* 底部翻页栏 */
+.pagination-bar {
+    background-color: color-mix(in srgb, var(--bg-panel), transparent 10%);
+    backdrop-filter: blur(10px);
+    border-top: 1px solid var(--border-main); 
+    padding: 0.5rem 1rem; 
+    display: flex; justify-content: space-between; align-items: center; 
+    flex-shrink: 0;
+}
+.drag-over-root {
+    background-color: var(--accent-faint) !important;
+    border: 2px dashed var(--accent-main) !important;
+}
+.drag-source { opacity: 0.5; filter: grayscale(1); }
+/* Padding Utilities */
+.pl-level-0 { padding-left: 0.75rem; }
+.pl-level-1 { padding-left: 1.5rem; }
+.pl-level-2 { padding-left: 2.25rem; }
+.sidebar .flex.border-b {
+    background-color: var(--bg-sub); /* 确保不是 panel 色 */
+    border-bottom: 1px solid var(--border-light) !important; /* 强化分割线 */
+    box-shadow: 0 1px 2px rgba(0,0,0,0.1); /* 增加一点立体感 */
+    z-index: 10;
+}
+
+/* 选中状态的 tab 样式微调，增加底部边框遮挡 */
+.sidebar button.border-b-2 {
+    position: relative;
+    top: 1px;
+}
+/* 顶部筛选标签 */
+.filter-chip { 
+    display: flex; align-items: center; gap: 0.25rem; 
+    background: var(--accent-main); color: white; 
+    padding: 0.1rem 0.5rem; border-radius: 9999px; 
+    font-size: 0.75rem; cursor: pointer; 
+}

@@ -1,0 +1,594 @@
+/* =========================================
+   8. 标签选择器 (Tag Picker)
+   ========================================= */
+.large-editor-textarea,
+.tag-modal-container { 
+    width: 800px; max-width: 90vw; height: 70vh; 
+    background: var(--bg-panel); 
+    border: 1px solid var(--border-light); 
+    border-radius: 12px; display: flex; flex-direction: column; overflow: hidden; padding: 1.5rem; 
+    color: var(--text-main);
+    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5);
+}
+.tag-cloud-container { 
+    flex: 1; overflow-y: auto; display: flex; flex-wrap: wrap; gap: 0.6rem; align-content: flex-start; padding: 0.5rem; 
+    background-color: var(--bg-sub);
+    border: 1px solid var(--border-light);
+    border-radius: 0.5rem;
+}
+.tag-chip-btn { 
+    display: inline-flex; align-items: center; padding: 0.4rem 0.8rem; border-radius: 9999px; 
+    font-size: 0.8rem; border: 1px solid; cursor: pointer; 
+    transition: all 0.15s ease-in-out; max-width: 100%; line-height: 1.2; 
+}
+.tag-chip-btn:hover { transform: translateY(-1px); box-shadow: 0 2px 5px var(--shadow-color); }
+
+.tag-chip-selected { 
+    background-color: var(--accent-main); 
+    color: #fff; 
+    border-color: var(--accent-light); 
+}
+.tag-chip-selected-purple { 
+    background-color: #7c3aed; 
+    color: white; 
+    border-color: #a78bfa; 
+}
+.tag-chip-unselected { 
+    background-color: var(--bg-panel); 
+    color: var(--text-sub); 
+    border-color: var(--border-light); 
+}
+.tag-chip-unselected:hover { 
+    background-color: var(--bg-hover); 
+    color: var(--text-main); 
+    border-color: var(--text-main);
+}
+
+/* =========================================
+   11. 高级编辑器重构 (Advanced Editor Refactor)
+   ========================================= */
+
+/* 顶部 Tab 栏 */
+.adv-tab-bar {
+    display: flex;
+    gap: 2px;
+    background: var(--bg-sub);
+    padding: 0 1rem;
+    border-bottom: 1px solid var(--border-light);
+    flex-shrink: 0;
+}
+
+.adv-tab {
+    padding: 0.75rem 1.5rem;
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: var(--text-dim);
+    border-bottom: 2px solid transparent;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.adv-tab:hover {
+    color: var(--text-main);
+    background-color: var(--bg-hover);
+}
+
+.adv-tab.active {
+    color: var(--accent-light);
+    border-bottom-color: var(--accent-main);
+    background-color: var(--bg-panel);
+}
+
+/* 内部两栏布局 */
+.adv-split-view {
+    display: flex;
+    flex: 1;
+    overflow: hidden;
+    height: 100%;
+}
+
+/* 左侧列表 */
+.adv-list-pane {
+    width: 240px;
+    background: var(--bg-sub);
+    border-right: 1px solid var(--border-light);
+    display: flex;
+    flex-direction: column;
+    flex-shrink: 0;
+}
+
+.adv-list-item {
+    padding: 0.75rem 1rem;
+    border-bottom: 1px solid var(--border-light);
+    cursor: pointer;
+    transition: background 0.2s;
+    border-left: 3px solid transparent;
+}
+
+.adv-list-item:hover {
+    background-color: var(--bg-hover);
+}
+
+.adv-list-item.active {
+    background-color: var(--bg-panel);
+    border-left-color: var(--accent-main);
+}
+
+/* 右侧编辑区 */
+.adv-editor-pane {
+    flex: 1;
+    padding: 1.5rem;
+    overflow-y: auto;
+    background: var(--bg-panel);
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+}
+
+/* 区域容器 */
+.adv-section {
+    border: 1px solid var(--border-light);
+    border-radius: 0.5rem;
+    background: color-mix(in srgb, var(--bg-sub), transparent 50%);
+    padding: 1rem;
+}
+
+.adv-section-title {
+    font-size: 0.75rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    color: var(--text-dim);
+    margin-bottom: 0.75rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.advanced-settings-panel {
+    background-color: var(--bg-panel); /* 统一使用变量 */
+    border: 1px solid var(--border-light);
+}
+
+/* 测试台 */
+.test-bench-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+    height: 200px;
+}
+
+.test-io-box {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    border: 1px solid var(--border-light);
+    border-radius: 0.375rem;
+    overflow: hidden;
+    background: var(--bg-code);
+}
+
+.test-io-header {
+    background: var(--bg-sub);
+    padding: 0.25rem 0.5rem;
+    font-size: 0.75rem;
+    color: var(--text-dim);
+    border-bottom: 1px solid var(--border-light);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.test-io-content {
+    flex: 1;
+    padding: 0.5rem;
+    font-family: monospace;
+    font-size: 0.8rem;
+    color: var(--text-code);
+    overflow: auto;
+    white-space: pre-wrap;
+    outline: none;
+    border: none;
+    background: transparent;
+    resize: none;
+}
+
+/* 切换按钮 */
+.toggle-pill {
+    display: flex;
+    background: var(--bg-panel);
+    border-radius: 4px;
+    padding: 2px;
+    border: 1px solid var(--border-light);
+}
+.toggle-pill-btn {
+    font-size: 10px;
+    padding: 2px 8px;
+    cursor: pointer;
+    border-radius: 2px;
+    color: var(--text-dim);
+    transition: all 0.2s;
+}
+.toggle-pill-btn.active {
+    background: var(--accent-main);
+    color: white;
+}
+
+/* --- START OF FILE style.css (Append this) --- */
+
+/* 新版左右分栏 Diff 容器 */
+.diff-container {
+    display: flex;
+    flex: 1;
+    overflow: hidden;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    font-size: 12px;
+    background-color: var(--bg-code);
+    color: var(--text-code);
+}
+
+.diff-pane {
+    flex: 1;
+    overflow-y: scroll; /* 强制显示滚动条以保持对称 */
+    overflow-x: auto;
+    padding: 10px 0;
+    border-right: 1px solid var(--border-light);
+}
+
+.diff-pane:last-child {
+    border-right: none;
+}
+
+/* 隐藏滚动条但保留功能 (可选，为了对齐好看，建议保留原生滚动条或自定义) */
+.diff-pane::-webkit-scrollbar { width: 8px; height: 8px; }
+
+/* 每一行的样式 */
+.diff-row {
+    display: flex;
+    min-height: 1.5em; /* 确保空行也有高度 */
+    line-height: 1.5;
+    padding: 0 8px;
+    white-space: pre-wrap;
+    word-break: break-all;
+}
+
+/* 差异高亮颜色 */
+/* 左侧（旧版）：删除的 */
+.diff-row.del {
+    background-color: rgba(239, 68, 68, 0.2); /* Red */
+    color: #fca5a5;
+    text-decoration: line-through;
+    text-decoration-color: rgba(255, 255, 255, 0.3);
+}
+
+/* 右侧（新版）：新增的 */
+.diff-row.add {
+    background-color: rgba(34, 197, 94, 0.2); /* Green */
+    color: #86efac;
+}
+
+/* 占位符（用于对齐） */
+.diff-row.empty {
+    background-color: repeating-linear-gradient(
+        45deg,
+        transparent,
+        transparent 5px,
+        rgba(128, 128, 128, 0.05) 5px,
+        rgba(128, 128, 128, 0.05) 10px
+    );
+    user-select: none;
+}
+
+/* 头部标题栏优化 */
+.diff-header {
+    display: flex;
+    font-size: 12px;
+    font-weight: bold;
+    border-bottom: 1px solid var(--border-light);
+    background-color: var(--bg-sub);
+    flex-shrink: 0;
+}
+.diff-header-item {
+    flex: 1;
+    padding: 8px;
+    text-align: center;
+    border-right: 1px solid var(--border-light);
+}
+
+/* --- Time Machine (Rollback) UI Refactor --- */
+
+.rollback-modal-container {
+    width: 95vw;
+    height: 90vh;
+    background: var(--bg-panel);
+    border-radius: 12px;
+    border: 1px solid var(--border-light);
+    box-shadow: 0 25px 50px -12px rgba(0,0,0,0.8);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    color: var(--text-main);
+}
+
+.rb-header {
+    padding: 1rem 1.5rem;
+    background: var(--bg-sub);
+    border-bottom: 1px solid var(--border-light);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-shrink: 0;
+}
+
+.rb-body {
+    display: flex;
+    flex: 1;
+    overflow: hidden;
+}
+
+/* Sidebar List */
+.rb-sidebar {
+    width: 380px;
+    background: var(--bg-sub);
+    border-right: 1px solid var(--border-light);
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+    flex-shrink: 0;
+}
+
+.rb-sidebar-header {
+    display: flex;
+    padding: 0.5rem;
+    border-bottom: 1px solid var(--border-light);
+    background: var(--bg-panel);
+    position: sticky;
+    top: 0;
+    z-index: 10;
+}
+
+.rb-item {
+    display: flex;
+    align-items: center;
+    border-bottom: 1px solid var(--border-light);
+    transition: background 0.2s;
+    padding-right: 0.5rem;
+}
+.rb-item:hover {
+    background-color: var(--bg-hover);
+}
+
+/* Diff Area */
+.rb-diff-area {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    background: var(--bg-code);
+}
+
+/* Diff Container Overrides */
+.diff-container {
+    flex: 1;
+    display: flex;
+    overflow: hidden;
+}
+.diff-header {
+    background: var(--bg-panel);
+    border-bottom: 1px solid var(--border-light);
+}
+
+/* 浅色模式下的 Diff 颜色优化 (高对比度) */
+html.light-mode .diff-added {
+    background-color: #dcfce7; /* 浅绿背景 */
+    color: #14532d;            /* 深墨绿文字 (Tailwind green-900) */
+    font-weight: 600;          /* 加粗 */
+    border-left: 2px solid #22c55e; /* 左侧加一条线增强识别 */
+}
+
+html.light-mode .diff-removed {
+    background-color: #fee2e2; /* 浅红背景 */
+    color: #7f1d1d;            /* 深暗红文字 (Tailwind red-900) */
+    text-decoration: line-through;
+    opacity: 0.95;             /* 提高不透明度 */
+    border-left: 2px solid #ef4444;
+}
+
+/* 深色模式微调 (可选) */
+.diff-added { 
+    background-color: rgba(34, 197, 94, 0.15); 
+    color: #86efac; 
+    border-left: 2px solid rgba(34, 197, 94, 0.5);
+}
+.diff-removed { 
+    background-color: rgba(239, 68, 68, 0.15); 
+    color: #fca5a5; 
+    border-left: 2px solid rgba(239, 68, 68, 0.5);
+}
+
+.toggle-checkbox:checked {
+    right: 0;
+    border-color: #68D391;
+}
+.toggle-checkbox:checked + .toggle-label {
+    background-color: #68D391;
+}
+
+/* === 大编辑器导航按钮样式 === */
+.large-editor-nav-btn {
+    background: var(--bg-sub);
+    border: 1px solid var(--border-light);
+    color: var(--text-main);
+    width: 28px;
+    height: 28px;
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    font-size: 12px;
+    transition: all 0.2s;
+}
+.large-editor-nav-btn:hover {
+    background: var(--bg-hover);
+    border-color: var(--accent-main);
+    color: var(--accent-main);
+}
+.large-editor-nav-info {
+    font-size: 12px;
+    font-family: monospace;
+    color: var(--text-dim);
+    margin: 0 8px;
+}
+/* 编辑区域自适应填满剩余空间 */
+.large-editor-textarea {
+    flex: 1; 
+    height: 100% !important; 
+    resize: none; /* 禁止手动拖动，因为是自动填充 */
+    font-size: 1rem;
+    line-height: 1.6;
+    margin-bottom: 0 !important;
+    overflow-y: auto !important;
+}
+.large-editor-container {
+    background-color: var(--bg-panel);
+    color: var(--text-main);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    border: 1px solid var(--border-light);
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.7);
+}
+.json-view-content {
+    flex: 1; overflow: auto; padding: 1rem; margin: 0;
+    color: inherit; 
+    white-space: pre-wrap; word-break: break-all; line-height: 1.5;
+}
+/* 标签筛选 - 删除模式适配 */
+/* 切换按钮 */
+.btn-toggle-delete {
+    font-size: 0.75rem;
+    padding: 0.25rem 0.5rem;
+    border-radius: 0.25rem;
+    border: 1px solid;
+    display: flex; align-items: center; gap: 0.25rem;
+    cursor: pointer;
+}
+/* 正常模式 */
+.btn-toggle-mode-normal {
+    background-color: rgba(37, 99, 235, 0.15);
+    border-color: rgba(37, 99, 235, 0.4);
+    color: #93c5fd;
+}
+html.light-mode .btn-toggle-mode-normal {
+    color: #2563eb; /* 浅色模式用深蓝字 */
+}
+/* 删除模式 */
+.btn-toggle-mode-delete {
+    background-color: rgba(220, 38, 38, 0.15);
+    border-color: rgba(220, 38, 38, 0.4);
+    color: #fca5a5;
+}
+html.light-mode .btn-toggle-mode-delete {
+    color: #dc2626; /* 浅色模式用深红字 */
+}
+
+/* 删除模式下的 Tag Chip */
+.tag-chip-delete-selected {
+    background-color: rgba(127, 29, 29, 0.6);
+    border-color: #dc2626;
+    color: white;
+}
+.tag-chip-delete-unselected {
+    background-color: var(--bg-sub); /* 跟随主题变浅 */
+    border-color: var(--border-light);
+    color: var(--text-sub);
+    opacity: 0.7;
+}
+.tag-chip-delete-unselected:hover {
+    opacity: 1;
+    border-color: #ef4444;
+    color: #ef4444;
+}
+
+/* --- 正则测试结果预览框样式补丁 --- */
+.status-card {
+    /* 模拟 ABO 状态栏的样式，确保预览时能看到效果 */
+    font-family: sans-serif;
+    background: #1f2937;
+    border-radius: 8px;
+    padding: 10px;
+    margin: 5px 0;
+    border: 1px solid #374151;
+}
+.status-header {
+    font-weight: bold; color: #e5e7eb; border-bottom: 1px solid #374151; margin-bottom: 8px; padding-bottom: 4px;
+}
+.status-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.status-field { background: #111827; padding: 8px; border-radius: 4px; border-left: 2px solid #6366f1; }
+.field-label { font-size: 10px; color: #9ca3af; text-transform: uppercase; }
+.field-value { font-size: 12px; color: #f3f4f6; font-weight: bold; }
+
+/* HTML预览切换按钮基础样式 (默认深色模式) */
+.preview-toggle-active {
+    background-color: var(--accent-main) !important;
+    color: #ffffff !important;
+    border: 1px solid var(--accent-light);
+}
+
+.preview-toggle-inactive {
+    background-color: transparent !important;
+    color: var(--text-dim) !important;
+    border: 1px solid transparent;
+}
+.preview-toggle-inactive:hover {
+    color: var(--text-main) !important;
+    background-color: var(--bg-hover) !important;
+}
+
+/* 浅色模式适配 (保持原有逻辑，稍作增强) */
+html.light-mode .preview-toggle-active {
+    background-color: var(--accent-main) !important;
+    color: #ffffff !important;
+    border-color: var(--accent-main);
+}
+
+html.light-mode .preview-toggle-inactive {
+    background-color: #e5e7eb !important;
+    color: #374151 !important;
+    border: 1px solid #d1d5db;
+}
+
+/* 2. 回滚界面样式 */
+.rollback-modal {
+    width: 900px; height: 80vh; 
+    background: var(--bg-panel); 
+    display: flex; flex-direction: column;
+}
+.rollback-list-item {
+    padding: 10px;
+    border-bottom: 1px solid var(--border-light);
+    cursor: pointer;
+    display: flex; justify-content: space-between; align-items: center;
+}
+.rollback-list-item:hover { background: var(--bg-hover); }
+.rollback-list-item.active { background: var(--accent-faint); border-left: 4px solid var(--accent-main); }
+
+/* 关键快照高亮 */
+.key-snapshot {
+    border-left: 4px solid #f59e0b !important; /* Amber */
+    background: rgba(245, 158, 11, 0.1);
+}
+.key-label {
+    background: #f59e0b; color: black; 
+    font-size: 10px; padding: 1px 4px; border-radius: 4px; 
+    font-weight: bold; margin-left: 8px;
+}
+
+/* Diff 视图 */
+.diff-view {
+    display: flex; flex: 1; overflow: hidden; font-family: monospace; font-size: 12px;
+}
+.diff-col { flex: 1; overflow: auto; padding: 10px; }
