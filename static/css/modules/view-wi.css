@@ -1018,3 +1018,220 @@ html.light-mode .wi-reader-detail .bg-\[var\(--bg-sub\)\]{
   60%  { box-shadow: 0 0 0 2px rgba(var(--accent-main-rgb), 0.12); }
   100% { box-shadow: 0 0 0 0 rgba(var(--accent-main-rgb), 0.0); transform: none; }
 }
+
+.wi-pill {
+  font-size: 10px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--border-light);
+  background: color-mix(in srgb, var(--bg-sub), transparent 0%);
+  color: var(--text-dim);
+  user-select: none;
+  white-space: nowrap;
+}
+.wi-pill.mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; }
+
+/* 状态 pill：尽量不大面积用纯色底，使用 mix 跟主题融合 */
+.wi-pill.on {
+  border-color: color-mix(in srgb, var(--accent-main), transparent 60%);
+  color: var(--accent-main);
+  background: color-mix(in srgb, var(--accent-main), transparent 92%);
+}
+.wi-pill.off { opacity: 0.7; }
+
+.wi-pill.const {
+  border-color: color-mix(in srgb, #3b82f6, transparent 55%);
+  color: color-mix(in srgb, #3b82f6, var(--text-main) 20%);
+  background: color-mix(in srgb, #3b82f6, transparent 92%);
+}
+.wi-pill.vector {
+  border-color: color-mix(in srgb, #a855f7, transparent 55%);
+  color: color-mix(in srgb, #a855f7, var(--text-main) 20%);
+  background: color-mix(in srgb, #a855f7, transparent 92%);
+}
+.wi-pill.normal {
+  border-color: color-mix(in srgb, #22c55e, transparent 60%);
+  color: color-mix(in srgb, #22c55e, var(--text-main) 20%);
+  background: color-mix(in srgb, #22c55e, transparent 92%);
+}
+
+/* =========================================
+   WI Grid - Bookshelf Skin
+   ========================================= */
+.wi-grid-card{
+  background: var(--bg-panel);
+  border-color: var(--border-main);
+  box-shadow: 0 6px 12px -8px var(--shadow-color);
+  overflow: hidden;
+  position: relative;
+}
+.wi-grid-card:hover{
+  transform: translateY(-3px);
+  border-color: var(--accent-light);
+  box-shadow: 0 16px 30px rgba(0,0,0,0.14);
+}
+html.light-mode .wi-grid-card:hover{
+  box-shadow: 0 16px 24px rgba(0,0,0,0.10);
+}
+
+/* Badge 统一定位：type 左上，file 右上 */
+.wi-grid-card .wi-badge{
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  right: auto;
+}
+.wi-grid-card .wi-badge.file{
+  left: auto;
+  right: 10px;
+  top: 10px;
+}
+
+/* hover 工具按钮统一皮肤 */
+.wi-grid-tool-btn{
+  background: color-mix(in srgb, var(--bg-panel), transparent 0%);
+  border: 1px solid var(--border-light);
+  color: var(--accent-main);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+.wi-grid-tool-btn:hover{
+  border-color: var(--accent-light);
+  background: var(--bg-hover);
+  transform: scale(1.05);
+}
+
+/* 封面区域：给📖一个“封面/书脊”视觉 */
+.wi-book-cover{
+  height: 88px;
+  border-radius: 14px;
+  background: linear-gradient(135deg,
+    color-mix(in srgb, var(--accent-main), transparent 86%),
+    color-mix(in srgb, var(--bg-sub), transparent 0%)
+  );
+  border: 1px solid var(--border-light);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+}
+
+/* 书脊装饰条 */
+.wi-book-cover::before{
+  content: '';
+  position: absolute;
+  left: 10px;
+  top: 10px;
+  bottom: 10px;
+  width: 6px;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--accent-main), transparent 55%);
+  opacity: 0.55;
+}
+
+.wi-book-icon{
+  font-size: 34px;
+  opacity: 0.92;
+  transform: translateY(-1px);
+  transition: transform .18s ease, filter .18s ease;
+  filter: drop-shadow(0 10px 10px rgba(0,0,0,0.15));
+}
+html.light-mode .wi-book-icon{
+  filter: drop-shadow(0 10px 10px rgba(0,0,0,0.10));
+}
+.wi-grid-card:hover .wi-book-icon{
+  transform: translateY(-3px) scale(1.05);
+}
+
+.wi-book-title{
+  padding: 10px 2px 0 2px;
+  color: var(--text-main);
+  min-height: 44px;
+}
+
+.wi-book-meta{
+  margin-top: auto;
+  padding-top: 10px;
+  border-top: 1px solid var(--border-light);
+  color: var(--text-dim);
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-width: 0;
+}
+
+/* =========================================
+   WI Fullscreen Editor - IDE Skin
+   ========================================= */
+
+/* 顶栏更稳：玻璃层 + 下边线 */
+.wi-editor-container > .flex > div:first-child {
+  background: color-mix(in srgb, var(--glass-bg), transparent 0%);
+  border-bottom: 1px solid var(--glass-border);
+}
+
+/* 顶栏按钮分级：主按钮不动，次按钮更像工具 */
+.wi-action-btn{
+  width: 30px;
+  height: 30px;
+  border-radius: 6px;
+  border: 1px solid transparent;
+  background: transparent;
+  transition: background .15s ease, border-color .15s ease, transform .15s ease;
+}
+.wi-action-btn:hover{
+  background: var(--bg-hover);
+  border-color: var(--border-light);
+  transform: translateY(-1px);
+}
+
+/* 左侧列表：更像 IDE 的选中行（减少位移动画干扰） */
+.wi-list-item:hover{
+  transform: none !important;
+}
+.wi-list-item.active{
+  background: color-mix(in srgb, var(--accent-main), transparent 92%) !important;
+  border-color: color-mix(in srgb, var(--accent-main), transparent 70%) !important;
+  box-shadow: none;
+}
+.wi-li-preview{
+  color: var(--text-dim);
+}
+
+/* 中间编辑区：写作宽度居中，长文本更舒适 */
+.wi-main-textarea{
+  max-width: 980px;
+  margin: 0 auto;
+  background: color-mix(in srgb, var(--bg-panel), var(--bg-body) 18%);
+  border-color: var(--border-main);
+}
+.wi-center-pane input[type="text"]{
+  max-width: 980px;
+  margin: 0 auto;
+}
+
+/* 右侧 inspector：更统一、更干净 */
+.wi-inspector-panel{
+  background: var(--bg-sub);
+  border-left-color: var(--border-main);
+}
+.wi-inspector-tabs{
+  background: var(--bg-panel);
+}
+.wi-tab-btn{
+  opacity: 0.75;
+}
+.wi-tab-btn.active{
+  opacity: 1;
+  background: var(--bg-body);
+}
+.props-group{
+  background: var(--bg-panel);
+  border-color: var(--border-light);
+  box-shadow: none;
+}
+.props-header{
+  background: color-mix(in srgb, var(--bg-hover), transparent 35%);
+}

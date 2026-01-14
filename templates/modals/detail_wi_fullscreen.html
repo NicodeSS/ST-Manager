@@ -55,6 +55,17 @@
                     </span>
                 </div>
 
+                <div class="hidden lg:flex items-center gap-2 mr-2" x-show="activeEditorEntry">
+                    <span class="wi-pill mono" :class="activeEditorEntry?.enabled ? 'on' : 'off'"
+                        x-text="activeEditorEntry?.enabled ? 'EN' : 'OFF'"></span>
+
+                    <span class="wi-pill"
+                        :class="activeEditorEntry?.constant ? 'const' : (activeEditorEntry?.vectorized ? 'vector' : 'normal')"
+                        x-text="activeEditorEntry?.constant ? 'Constant' : (activeEditorEntry?.vectorized ? 'Vector' : 'Normal')"></span>
+
+                    <span class="wi-pill mono" x-text="'#' + (activeEditorEntry?.insertion_order ?? 0)"></span>
+                </div>
+
                 <!-- 1. 时光机 -->
                 <button @click="openRollback && openRollback()" class="wi-action-btn" title="时光机：查看历史版本与回滚">⏪</button>
 
@@ -165,6 +176,9 @@
                                         #<span x-text="entry.insertion_order"></span>
                                     </span>
                                 </div>
+                                <div class="wi-li-preview text-[10px] opacity-50 truncate pl-4 mt-0.5"
+                                    x-text="(entry.content || '').replace(/\n/g,' ').slice(0, 90)">
+                                </div>
                             </div>
                         </div>
                     </template>
@@ -188,9 +202,7 @@
                     <div class="flex flex-col h-full">
 
                         <div class="p-4 pb-2 flex-shrink-0 flex items-center gap-4 transition-all duration-300 border-b"
-                            :class="isEditingClipboard 
-             ? 'bg-purple-900/10 border-purple-500/30' 
-             : 'bg-transparent border-transparent'">
+                            :class="isEditingClipboard ? 'bg-purple-900/10 border-purple-500/30' : 'bg-transparent border-transparent'">
 
                             <div class="flex-1">
                                 <div class="flex items-center gap-2 mb-1">
