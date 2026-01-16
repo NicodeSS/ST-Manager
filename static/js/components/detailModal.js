@@ -273,6 +273,11 @@ export default function detailModal() {
                     this.editingData.first_mes = safeCard.first_mes || "";
                     this.editingData.mes_example = safeCard.mes_example || "";
                     this.editingData.creator_notes = safeCard.creator_notes || "";
+
+                    this.editingData.personality = safeCard.personality || "";
+                    this.editingData.scenario = safeCard.scenario || "";
+                    this.editingData.system_prompt = safeCard.system_prompt || "";
+                    this.editingData.post_history_instructions = safeCard.post_history_instructions || "";
                     
                     this.editingData.alternate_greetings = safeCard.alternate_greetings || [];
                     if (this.editingData.alternate_greetings.length === 0) this.editingData.alternate_greetings = [""];

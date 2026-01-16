@@ -262,6 +262,70 @@
                                 <textarea x-model="editingData.description" class="form-textarea"
                                     style="height: 10rem; resize:none;"></textarea>
                             </div>
+
+                            <template x-if="editingData.creator_notes || editingData.personality || editingData.scenario || editingData.system_prompt || editingData.post_history_instructions">
+                                <div class="mt-6 pt-4 border-t border-[var(--border-light)]">
+                                    <div class="flex items-center gap-2 mb-3 px-1">
+                                        <span class="text-xs font-bold uppercase tracking-wider text-[var(--text-dim)]">
+                                            🔐 技术参数 (只读)
+                                        </span>
+                                    </div>
+
+                                    <div class="flex flex-col gap-3">
+                                        
+                                        <!-- 1. 作者注释 (Creator Notes) -->
+                                        <div x-show="editingData.creator_notes" class="detail-card" style="border-color: var(--border-light); background: rgba(0,0,0,0.1);">
+                                            <div class="detail-card-head py-1 min-h-[2rem]">
+                                                <div class="detail-card-title text-xs text-gray-500">作者注释 (Creator Notes)</div>
+                                                <button class="expand-btn scale-90 opacity-60 hover:opacity-100" @click="openLargeEditor('creator_notes','作者注释')">⤢</button>
+                                            </div>
+                                            <textarea readonly x-model="editingData.creator_notes" class="form-textarea text-xs bg-transparent text-gray-400"
+                                                style="height: 6rem; resize:none; border:none; focus:ring-0;"></textarea>
+                                        </div>
+
+                                        <!-- 2. 人格设定 (Personality) -->
+                                        <div x-show="editingData.personality" class="detail-card" style="border-color: var(--border-light); background: rgba(0,0,0,0.1);">
+                                            <div class="detail-card-head py-1 min-h-[2rem]">
+                                                <div class="detail-card-title text-xs text-gray-500">人格设定 (Personality)</div>
+                                                <button class="expand-btn scale-90 opacity-60 hover:opacity-100" @click="openLargeEditor('personality','人格设定')">⤢</button>
+                                            </div>
+                                            <textarea readonly x-model="editingData.personality" class="form-textarea text-xs bg-transparent text-gray-400"
+                                                style="height: 6rem; resize:none; border:none; focus:ring-0;"></textarea>
+                                        </div>
+
+                                        <!-- 3. 场景设定 (Scenario) -->
+                                        <div x-show="editingData.scenario" class="detail-card" style="border-color: var(--border-light); background: rgba(0,0,0,0.1);">
+                                            <div class="detail-card-head py-1 min-h-[2rem]">
+                                                <div class="detail-card-title text-xs text-gray-500">场景设定 (Scenario)</div>
+                                                <button class="expand-btn scale-90 opacity-60 hover:opacity-100" @click="openLargeEditor('scenario','场景设定')">⤢</button>
+                                            </div>
+                                            <textarea readonly x-model="editingData.scenario" class="form-textarea text-xs bg-transparent text-gray-400"
+                                                style="height: 5rem; resize:none; border:none; focus:ring-0;"></textarea>
+                                        </div>
+
+                                        <!-- 4. 系统提示词 (System Prompt) -->
+                                        <div x-show="editingData.system_prompt" class="detail-card" style="border-color: var(--border-light); background: rgba(0,0,0,0.1);">
+                                            <div class="detail-card-head py-1 min-h-[2rem]">
+                                                <div class="detail-card-title text-xs text-gray-500">系统提示词 (System Prompt)</div>
+                                                <button class="expand-btn scale-90 opacity-60 hover:opacity-100" @click="openLargeEditor('system_prompt','系统提示词')">⤢</button>
+                                            </div>
+                                            <textarea readonly x-model="editingData.system_prompt" class="form-textarea text-xs font-mono bg-transparent text-gray-400"
+                                                style="height: 5rem; resize:none; border:none; focus:ring-0;"></textarea>
+                                        </div>
+
+                                        <!-- 5. 历史指令 (Post History Instructions) -->
+                                        <div x-show="editingData.post_history_instructions" class="detail-card" style="border-color: var(--border-light); background: rgba(0,0,0,0.1);">
+                                            <div class="detail-card-head py-1 min-h-[2rem]">
+                                                <div class="detail-card-title text-xs text-gray-500">历史指令 (Post History Instructions)</div>
+                                                <button class="expand-btn scale-90 opacity-60 hover:opacity-100" @click="openLargeEditor('post_history_instructions','历史指令')">⤢</button>
+                                            </div>
+                                            <textarea readonly x-model="editingData.post_history_instructions" class="form-textarea text-xs font-mono bg-transparent text-gray-400"
+                                                style="height: 5rem; resize:none; border:none; focus:ring-0;"></textarea>
+                                        </div>
+
+                                    </div>
+                                </div>
+                            </template>
                         </div>
                     </section>
 
